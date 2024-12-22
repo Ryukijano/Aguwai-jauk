@@ -29,6 +29,12 @@ export default function ResourcesPage() {
         <ResumeUploader />
         <ResumeFeedback />
       </div>
+
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Upload Your Resume for Feedback in Assamese</h2>
+        <ResumeUploader />
+        <ResumeFeedback />
+      </div>
     </div>
   );
 }
