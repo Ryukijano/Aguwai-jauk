@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^3.3.4",
     "@supabase/supabase-js": "^2.39.3",
     "@tanstack/react-query": "^5.18.1",
+    "axios": "^1.7.9",
     "cheerio": "^1.0.0-rc.12",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",

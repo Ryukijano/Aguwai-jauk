@@ -17,3 +17,9 @@ export const GEO_BOUNDS = {
 
 // Re-export existing constants
 export { SUBJECTS, EXPERIENCE_LEVELS, JOB_TYPES, SCHOOL_TYPES, DISTRICTS } from '../lib/constants';
+
+// Google Maps API Key
+export const GOOGLE_MAPS_API_KEY = 'AIzaSyBFDFWz97fPl9RK6Qm-z-AmTnvJH3n62Cc';
+
+// Gemini API Configuration
+export const GEMINI_API_VERSION = 'gemini-1.5-8b';

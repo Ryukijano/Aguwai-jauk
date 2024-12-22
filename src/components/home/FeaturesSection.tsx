@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FeatureCard } from './FeatureCard';
 import { 
   Search, 
@@ -11,6 +11,12 @@ import {
 import { Chatbot } from '../chatbot/Chatbot'; // Import the Chatbot component
 
 export function FeaturesSection() {
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false); // State to manage chatbot visibility
+
+  const toggleChatbot = () => {
+    setIsChatbotOpen(!isChatbotOpen);
+  };
+
   const features = [
     {
       icon: Search,
