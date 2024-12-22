@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Job } from '../../types/job';
 import { JobListItem } from './JobListItem';
 import { useLangGraph } from '../../hooks/useLangGraph';
@@ -10,6 +10,17 @@ interface JobListProps {
 
 export function JobList({ jobs, onApply }: JobListProps) {
   const { visualizeJobListings } = useLangGraph();
+  const [visualizationError, setVisualizationError] = useState<boolean>(false);
+
+  const renderVisualization = () => {
+    try {
+      return visualizeJobListings(jobs);
+    } catch (error) {
+      console.error('Failed to render job listings visualization:', error);
+      setVisualizationError(true);
+      return null;
+    }
+  };
 
   if (jobs.length === 0) {
     return (
@@ -26,7 +37,13 @@ export function JobList({ jobs, onApply }: JobListProps) {
       ))}
       <div className="mt-8">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Job Listings Visualization</h3>
-        {visualizeJobListings(jobs)}
+        {visualizationError ? (
+          <div className="text-gray-500 text-center p-4 bg-gray-50 rounded-lg">
+            Unable to load visualization. Please try again later.
+          </div>
+        ) : (
+          renderVisualization()
+        )}
       </div>
     </div>
   );

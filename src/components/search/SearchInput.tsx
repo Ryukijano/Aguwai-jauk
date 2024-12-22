@@ -19,14 +19,22 @@ export function SearchInput({ onSearch }: SearchInputProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const filters = {
-      search: searchTerm,
-      location,
-      subject
-    };
-    const processedFilters = await processNaturalLanguageQuery(filters);
-    onSearch(processedFilters);
-    visualizeSearchResults(processedFilters);
+    try {
+      const filters = {
+        search: searchTerm,
+        location,
+        subject
+      };
+      const processedFilters = await processNaturalLanguageQuery(filters);
+      await onSearch(processedFilters);
+      await visualizeSearchResults(processedFilters);
+    } catch (error) {
+      console.error('Error processing search:', error);
+      if (error instanceof Error) {
+        throw new Error(`Search failed: ${error.message}`);
+      }
+      throw new Error('Search failed: An unexpected error occurred');
+    }
   };
 
   return (

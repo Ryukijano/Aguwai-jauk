@@ -58,11 +58,10 @@ export function HeroSection({ onSearch }: HeroSectionProps) {
           </div>
         </div>
 
-        <div className="relative w-full max-w-7xl mx-auto">
-          <div className="flex justify-end mb-4 sm:mb-6 md:mb-8">
-            <button
-              onClick={toggleChatbot}
-              className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
+        <div className="fixed bottom-4 right-4">
+          <button
+            onClick={toggleChatbot}
+            className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
           >
             Chat with us
           </button>
