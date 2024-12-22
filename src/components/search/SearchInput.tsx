@@ -3,6 +3,8 @@ import { Search } from 'lucide-react';
 import { JobFilters } from '../../types/job';
 import { Select } from '../ui/Select';
 import { SUBJECTS, DISTRICTS } from '../../lib/constants';
+import { useLangChain } from '../../hooks/useLangChain';
+import { useLangGraph } from '../../hooks/useLangGraph';
 
 interface SearchInputProps {
   onSearch: (filters: Partial<JobFilters>) => void;
@@ -12,14 +14,19 @@ export function SearchInput({ onSearch }: SearchInputProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [location, setLocation] = useState('');
   const [subject, setSubject] = useState('');
+  const { processNaturalLanguageQuery } = useLangChain();
+  const { visualizeSearchResults } = useLangGraph();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({
+    const filters = {
       search: searchTerm,
       location,
       subject
-    });
+    };
+    const processedFilters = await processNaturalLanguageQuery(filters);
+    onSearch(processedFilters);
+    visualizeSearchResults(processedFilters);
   };
 
   return (

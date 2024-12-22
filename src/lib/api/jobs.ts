@@ -1,6 +1,7 @@
 import { supabase } from '../supabase/client';
 import { Job, JobFilters } from '../../types';
 import { isWithinAssam } from '../utils/geo';
+import { processNaturalLanguageQuery } from '../utils/langChain'; // Import LangChain utility
 
 export async function searchJobs(filters: Partial<JobFilters>): Promise<Job[]> {
   let query = supabase
@@ -13,7 +14,8 @@ export async function searchJobs(filters: Partial<JobFilters>): Promise<Job[]> {
 
   // Apply filters
   if (filters.search) {
-    query = query.ilike('title', `%${filters.search}%`);
+    const processedSearch = await processNaturalLanguageQuery(filters.search); // Process natural language query
+    query = query.ilike('title', `%${processedSearch}%`);
   }
   
   if (filters.location) {
