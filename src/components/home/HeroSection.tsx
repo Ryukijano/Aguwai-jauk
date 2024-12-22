@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SearchInput } from '../search/SearchInput';
 import { JobFilters } from '../../types/job';
 import { APP_NAME } from '../../config/constants';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { Chatbot } from '../chatbot/Chatbot'; // Import the Chatbot component
 
 interface HeroSectionProps {
   onSearch: (filters: Partial<JobFilters>) => void;
@@ -10,6 +11,11 @@ interface HeroSectionProps {
 
 export function HeroSection({ onSearch }: HeroSectionProps) {
   const { isInAssam, error } = useGeolocation();
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false); // State to manage chatbot visibility
+
+  const toggleChatbot = () => {
+    setIsChatbotOpen(!isChatbotOpen);
+  };
 
   return (
     <div className="relative bg-indigo-700 py-20 px-4 sm:px-6 lg:px-8">
@@ -50,6 +56,16 @@ export function HeroSection({ onSearch }: HeroSectionProps) {
           <div>
             <span className="font-semibold text-white">10,000+</span> Teachers
           </div>
+        </div>
+
+        <div className="fixed bottom-4 right-4">
+          <button
+            onClick={toggleChatbot}
+            className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
+          >
+            Chat with us
+          </button>
+          {isChatbotOpen && <Chatbot />}
         </div>
       </div>
     </div>

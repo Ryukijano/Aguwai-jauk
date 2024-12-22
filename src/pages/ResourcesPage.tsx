@@ -1,4 +1,6 @@
 import React from 'react';
+import { ResumeUploader } from '../components/resume/ResumeUploader';
+import { ResumeFeedback } from '../components/resume/ResumeFeedback';
 
 export default function ResourcesPage() {
   return (
@@ -20,6 +22,12 @@ export default function ResourcesPage() {
           <h3 className="text-lg font-semibold text-gray-900">Teaching Certifications</h3>
           <p className="text-gray-600 mt-2">Information about required certifications</p>
         </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Upload Your Resume for Feedback</h2>
+        <ResumeUploader />
+        <ResumeFeedback />
       </div>
     </div>
   );

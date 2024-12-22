@@ -3,6 +3,8 @@ import { Search } from 'lucide-react';
 import { JobFilters } from '../../types/job';
 import { Select } from '../ui/Select';
 import { SUBJECTS, DISTRICTS } from '../../lib/constants';
+import { useLangChain } from '../../hooks/useLangChain';
+import { useLangGraph } from '../../hooks/useLangGraph';
 
 interface SearchInputProps {
   onSearch: (filters: Partial<JobFilters>) => void;
@@ -12,14 +14,27 @@ export function SearchInput({ onSearch }: SearchInputProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [location, setLocation] = useState('');
   const [subject, setSubject] = useState('');
+  const { processNaturalLanguageQuery } = useLangChain();
+  const { visualizeSearchResults } = useLangGraph();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({
-      search: searchTerm,
-      location,
-      subject
-    });
+    try {
+      const filters = {
+        search: searchTerm,
+        location,
+        subject
+      };
+      const processedFilters = await processNaturalLanguageQuery(filters);
+      await onSearch(processedFilters);
+      await visualizeSearchResults(processedFilters);
+    } catch (error) {
+      console.error('Error processing search:', error);
+      if (error instanceof Error) {
+        throw new Error(`Search failed: ${error.message}`);
+      }
+      throw new Error('Search failed: An unexpected error occurred');
+    }
   };
 
   return (

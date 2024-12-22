@@ -6,6 +6,7 @@ import JobsPage from './pages/JobsPage';
 import SchoolsPage from './pages/SchoolsPage';
 import ResourcesPage from './pages/ResourcesPage';
 import Header from './components/layout/Header';
+import ResumePage from './pages/ResumePage'; // Import the new ResumePage component
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ export default function App() {
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/schools" element={<SchoolsPage />} />
               <Route path="/resources" element={<ResourcesPage />} />
+              <Route path="/resume" element={<ResumePage />} /> {/* Add the new route for ResumePage */}
             </Routes>
           </main>
         </div>

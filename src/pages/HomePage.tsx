@@ -4,9 +4,11 @@ import { FeaturesSection } from '../components/home/FeaturesSection';
 import { StatsSection } from '../components/home/StatsSection';
 import { JobList } from '../components/jobs/JobList';
 import { useJobSearch } from '../hooks/useJobSearch';
+import { useLangGraph } from '../hooks/useLangGraph';
 
 export default function HomePage() {
   const { jobs, isLoading, searchJobs } = useJobSearch();
+  const { visualizeSearchResults } = useLangGraph();
 
   const handleApply = (jobId: string) => {
     // TODO: Implement application logic
@@ -25,7 +27,15 @@ export default function HomePage() {
             <p className="text-gray-500">Loading jobs...</p>
           </div>
         ) : (
-          <JobList jobs={jobs} onApply={handleApply} />
+          <>
+            <JobList jobs={jobs} onApply={handleApply} />
+            {jobs.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Job Search Visualization</h3>
+                {visualizeSearchResults(jobs)}
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

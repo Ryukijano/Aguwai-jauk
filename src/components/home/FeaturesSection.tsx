@@ -8,6 +8,7 @@ import {
   MessageSquare, 
   Brain 
 } from 'lucide-react';
+import { Chatbot } from '../chatbot/Chatbot'; // Import the Chatbot component
 
 export function FeaturesSection() {
   const features = [
@@ -59,6 +60,16 @@ export function FeaturesSection() {
           {features.map((feature, index) => (
             <FeatureCard key={index} {...feature} />
           ))}
+        </div>
+
+        <div className="fixed bottom-4 right-4">
+          <button
+            onClick={toggleChatbot}
+            className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
+          >
+            Chat with us
+          </button>
+          {isChatbotOpen && <Chatbot />}
         </div>
       </div>
     </section>
