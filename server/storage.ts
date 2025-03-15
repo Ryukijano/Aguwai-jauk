@@ -102,8 +102,8 @@ export class MemStorage implements IStorage {
   }
 
   private initializeSampleData() {
-    // Sample User
-    const user: User = {
+    // Sample Users
+    const user1: User = {
       id: this.userIdCounter++,
       username: "rajdeep",
       password: "password",
@@ -114,7 +114,21 @@ export class MemStorage implements IStorage {
       qualifications: "M.Sc Mathematics, B.Ed",
       createdAt: new Date(),
     };
-    this.users.set(user.id, user);
+    this.users.set(user1.id, user1);
+    
+    // Add another test user with simpler credentials
+    const user2: User = {
+      id: this.userIdCounter++,
+      username: "test",
+      password: "test123",
+      name: "Test User",
+      email: "test@example.com",
+      profilePicture: null,
+      bio: "Test user account for demonstration purposes",
+      qualifications: "B.Ed, English",
+      createdAt: new Date(),
+    };
+    this.users.set(user2.id, user2);
     
     // Sample Jobs
     const sampleJobs: InsertJobListing[] = [
@@ -177,7 +191,7 @@ export class MemStorage implements IStorage {
     // Sample Applications
     const sampleApplications: InsertApplication[] = [
       {
-        userId: user.id,
+        userId: user1.id,
         jobId: 1,
         status: "Applied",
         resumeUrl: "https://drive.google.com/file/resume.pdf",
@@ -186,7 +200,7 @@ export class MemStorage implements IStorage {
         interviewDate: null,
       },
       {
-        userId: user.id,
+        userId: user1.id,
         jobId: 2,
         status: "Interview Scheduled",
         resumeUrl: "https://drive.google.com/file/resume.pdf",
@@ -208,25 +222,25 @@ export class MemStorage implements IStorage {
     // Sample Social Links
     const sampleSocialLinks: InsertSocialLink[] = [
       {
-        userId: user.id,
+        userId: user1.id,
         platform: "LinkedIn",
         url: "https://linkedin.com/in/rajdeepsharma",
         displayName: "LinkedIn",
       },
       {
-        userId: user.id,
+        userId: user1.id,
         platform: "YouTube",
         url: "https://youtube.com/@rajdeepsharma",
         displayName: "YouTube",
       },
       {
-        userId: user.id,
+        userId: user1.id,
         platform: "Instagram",
         url: "https://instagram.com/rajdeepsharma",
         displayName: "Instagram",
       },
       {
-        userId: user.id,
+        userId: user1.id,
         platform: "Website",
         url: "https://rajdeepsharma.com",
         displayName: "Website",
@@ -251,7 +265,7 @@ export class MemStorage implements IStorage {
     
     const sampleEvents: InsertEvent[] = [
       {
-        userId: user.id,
+        userId: user1.id,
         title: "Interview with DPS Dibrugarh",
         description: "Virtual interview for Primary Teacher position",
         startTime: interviewDate,
@@ -261,7 +275,7 @@ export class MemStorage implements IStorage {
         googleCalendarId: "event123",
       },
       {
-        userId: user.id,
+        userId: user1.id,
         title: "Document Submission Deadline",
         description: "Last day to submit documents for Government Higher Secondary School application",
         startTime: deadlineDate,
@@ -284,17 +298,17 @@ export class MemStorage implements IStorage {
     // Sample Chat Messages
     const sampleChatMessages: InsertChatMessage[] = [
       {
-        userId: user.id,
+        userId: user1.id,
         content: "Hello Rajdeep! How can I help you with your teaching job search today?",
         isFromUser: false,
       },
       {
-        userId: user.id,
+        userId: user1.id,
         content: "Can you help me prepare for my upcoming interview?",
         isFromUser: true,
       },
       {
-        userId: user.id,
+        userId: user1.id,
         content: "Of course! I see you have an interview with DPS Dibrugarh on May 24th. Would you like me to suggest some common interview questions for a mathematics teaching position, or help you prepare specific answers based on your resume?",
         isFromUser: false,
       }

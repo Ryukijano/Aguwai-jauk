@@ -90,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         checkPeriod: 86400000 // prune expired entries every 24h
       }),
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true, // Changed to true to ensure session is created before use
       secret: process.env.SESSION_SECRET || "aguwai-jauk-secret"
     })
   );
