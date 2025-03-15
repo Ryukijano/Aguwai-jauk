@@ -1,10 +1,30 @@
-import express, { type Express, Request, Response } from "express";
+import express, { type Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import session from "express-session";
 import memorystore from "memorystore";
 import { storage } from "./storage";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+
+// Promisify scrypt
+const scryptAsync = promisify(scrypt);
+
+// Password hashing function
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+// Password comparison function
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
+  const [hashed, salt] = stored.split(".");
+  const hashedBuf = Buffer.from(hashed, "hex");
+  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+  return timingSafeEqual(hashedBuf, suppliedBuf);
+}
 
 // Extend express session types
 declare module "express-session" {
@@ -93,7 +113,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Username already exists" });
       }
       
-      const user = await storage.createUser(userData);
+      // Hash password before storing
+      const hashedPassword = await hashPassword(userData.password);
+      
+      const user = await storage.createUser({
+        ...userData,
+        password: hashedPassword
+      });
+      
       req.session.userId = user.id;
       
       return res.status(201).json({ 
@@ -103,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Register error:", error);
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
     }
   });
   
@@ -112,7 +139,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { username, password } = req.body;
       const user = await storage.getUserByUsername(username);
       
-      if (!user || user.password !== password) {
+      if (!user) {
+        return res.status(401).json({ message: "Invalid username or password" });
+      }
+      
+      // For the existing sample user with plain-text password
+      let passwordValid = false;
+      
+      if (user.password.includes('.')) {
+        // Hashed password with salt
+        passwordValid = await comparePasswords(password, user.password);
+      } else {
+        // Plain text password (only for existing records)
+        passwordValid = user.password === password;
+      }
+      
+      if (!passwordValid) {
         return res.status(401).json({ message: "Invalid username or password" });
       }
       
@@ -125,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Login error:", error);
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
     }
   });
   
@@ -140,6 +182,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   apiRouter.get("/auth/user", requireAuth, async (req, res) => {
     try {
+      // Ensure we have a valid userId
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
       const user = await storage.getUser(req.session.userId);
       
       if (!user) {
@@ -157,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Get user error:", error);
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
     }
   });
   
