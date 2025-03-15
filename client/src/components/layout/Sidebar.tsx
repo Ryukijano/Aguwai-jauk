@@ -22,17 +22,15 @@ interface NavItemProps {
 
 const NavItem = ({ icon, text, href, isActive }: NavItemProps) => {
   return (
-    <Link href={href}>
-      <a
-        className={`px-4 py-2 rounded-lg flex items-center space-x-3 transition ${
-          isActive 
-            ? "bg-primary-50 text-primary-600 font-medium" 
-            : "text-gray-600 hover:bg-gray-100"
-        }`}
-      >
-        {icon}
-        <span>{text}</span>
-      </a>
+    <Link href={href}
+      className={`px-4 py-2 rounded-lg flex items-center space-x-3 transition ${
+        isActive 
+          ? "bg-primary-50 text-primary-600 font-medium" 
+          : "text-gray-600 hover:bg-gray-100"
+      }`}
+    >
+      {icon}
+      <span>{text}</span>
     </Link>
   );
 };
@@ -55,13 +53,11 @@ const Sidebar = ({ isMobileOpen = false, onCloseMobile }: SidebarProps) => {
     >
       <div className="p-4 flex flex-col h-full">
         <div className="flex items-center justify-between mb-6">
-          <Link href="/">
-            <a className="flex items-center space-x-2">
-              <span className="bg-primary-500 text-white p-1 rounded">
-                <Briefcase size={20} />
-              </span>
-              <span className="text-xl font-heading font-bold text-gray-800">Aguwai Jauk</span>
-            </a>
+          <Link href="/" className="flex items-center space-x-2">
+            <span className="bg-primary-500 text-white p-1 rounded">
+              <Briefcase size={20} />
+            </span>
+            <span className="text-xl font-heading font-bold text-gray-800">Aguwai Jauk</span>
           </Link>
           
           {isMobileOpen && (
