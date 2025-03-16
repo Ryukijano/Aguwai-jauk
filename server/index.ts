@@ -1,11 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { setupAuth } from "./auth";
 
 const app = express();
+
+// Add JSON middleware before any routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -37,19 +41,23 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Set up authentication before routes
+  setupAuth(app);
+
+  // Register API routes before Vite middleware
   const server = await registerRoutes(app);
 
+  // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    // Don't throw after sending response
     res.status(status).json({ message });
-    throw err;
+    console.error(err);
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Only setup vite/static serving after API routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
@@ -57,8 +65,6 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = 5000;
   server.listen({
     port,
