@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Briefcase, Eye, EyeOff } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth-provider";
 
 const loginSchema = z.object({
   username: z.string().min(1, { message: "Username is required" }),
@@ -32,6 +32,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
+  const { login } = useAuth();
 
   // Get the redirect path from URL params
   const params = new URLSearchParams(window.location.search);
@@ -49,20 +50,14 @@ const Login = () => {
   const onSubmit = async (values: LoginValues) => {
     try {
       setIsLoading(true);
-      
-      await apiRequest("POST", "/api/auth/login", {
+      await login({
         username: values.username,
         password: values.password,
       });
-
-      toast({
-        title: "Login successful",
-        description: "Welcome back to Aguwai Jauk!",
-      });
-
-      // Redirect to dashboard or original destination
       navigate(redirectTo);
     } catch (error) {
+      // Error is already handled by the auth provider
+      console.error("Login error:", error);
       toast({
         title: "Login failed",
         description: "Invalid username or password. Please try again.",
@@ -118,10 +113,10 @@ const Login = () => {
                       <FormLabel>Password</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Input 
-                            type={showPassword ? "text" : "password"} 
-                            placeholder="Enter your password" 
-                            {...field} 
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            {...field}
                           />
                           <button
                             type="button"

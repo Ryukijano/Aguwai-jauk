@@ -2,12 +2,33 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth } from "./auth";
+import session from "express-session";
+import { storage } from "./storage";
 
 const app = express();
 
 // Add JSON middleware before any routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Configure session middleware
+const sessionSettings: session.SessionOptions = {
+  secret: process.env.SESSION_SECRET || "development-secret",
+  resave: false,
+  saveUninitialized: false,
+  store: storage.sessionStore,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: "lax"
+  },
+  name: "aguwai.sid" // Custom session ID name
+};
+
+// Set up session middleware
+app.set("trust proxy", 1);
+app.use(session(sessionSettings));
 
 // Add logging middleware
 app.use((req, res, next) => {
@@ -20,6 +41,15 @@ app.use((req, res, next) => {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
+
+  // Log session and authentication state for debugging
+  if (path.startsWith("/api")) {
+    console.log(`Request ${path}:`, {
+      sessionID: req.sessionID,
+      isAuthenticated: req.isAuthenticated?.(),
+      user: req.user,
+    });
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
@@ -41,7 +71,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Set up authentication before routes
+  // Set up authentication after session middleware
   setupAuth(app);
 
   // Register API routes before Vite middleware

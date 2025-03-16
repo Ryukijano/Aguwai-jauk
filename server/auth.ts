@@ -1,7 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
-import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
@@ -29,19 +28,7 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "development-secret",
-    resave: false,
-    saveUninitialized: false,
-    store: storage.sessionStore,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-  };
-
-  app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
+  // Initialize Passport
   app.use(passport.initialize());
   app.use(passport.session());
 
@@ -50,40 +37,46 @@ export function setupAuth(app: Express) {
       try {
         const user = await storage.getUserByUsername(username);
         if (!user) {
-          return done(null, false);
+          return done(null, false, { message: "Invalid username or password" });
         }
 
-        // Handle both hashed and plain text passwords during transition
         let passwordValid = false;
         if (user.password.includes('.')) {
           // Hashed password
           passwordValid = await comparePasswords(password, user.password);
         } else {
-          // Plain text password (only for sample data)
+          // Plain text password (only for testing)
           passwordValid = user.password === password;
         }
 
         if (!passwordValid) {
-          return done(null, false);
+          return done(null, false, { message: "Invalid username or password" });
         }
 
         return done(null, user);
       } catch (error) {
         return done(error);
       }
-    }),
+    })
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
+  passport.serializeUser((user, done) => {
+    done(null, user.id);
+  });
+
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
+      if (!user) {
+        return done(null, false);
+      }
       done(null, user);
     } catch (error) {
       done(error);
     }
   });
 
+  // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
@@ -122,7 +115,7 @@ export function setupAuth(app: Express) {
         return res.status(500).json({ message: "Login failed" });
       }
       if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
+        return res.status(401).json({ message: info?.message || "Invalid username or password" });
       }
       req.login(user, (err) => {
         if (err) {
@@ -140,6 +133,10 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(200).json({ message: "Already logged out" });
+    }
+
     req.logout((err) => {
       if (err) {
         console.error("Logout error:", err);
@@ -150,9 +147,13 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/auth/user", (req, res) => {
+    console.log("Session:", req.session);
+    console.log("User:", req.user);
+
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
+
     const user = req.user;
     res.json({
       id: user.id,
