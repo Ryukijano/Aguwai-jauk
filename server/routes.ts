@@ -36,7 +36,7 @@ declare module "express-session" {
 // Extend express request types
 declare module "express" {
   interface Request {
-    session: session.Session & Partial<session.SessionData>;
+    session: session.Session & { userId?: number };
   }
 }
 import { 
@@ -79,50 +79,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up API routes
   const apiRouter = express.Router();
   app.use("/api", apiRouter);
-  
+
   // Enable sessions
   const MemoryStore = memorystore(session);
-  
+
+  // Configure session middleware before routes
   app.use(
     session({
-      cookie: { maxAge: 86400000 }, // 24 hours
+      cookie: { maxAge: 86400000, secure: process.env.NODE_ENV === 'production' }, // 24 hours
       store: new MemoryStore({
         checkPeriod: 86400000 // prune expired entries every 24h
       }),
       resave: false,
-      saveUninitialized: true, // Changed to true to ensure session is created before use
+      saveUninitialized: false,
       secret: process.env.SESSION_SECRET || "aguwai-jauk-secret"
     })
   );
-  
-  // Authentication middleware
-  const requireAuth = (req: Request, res: Response, next: Function) => {
-    if (!req.session.userId) {
+
+  // Authentication middleware with proper type checking
+  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
     next();
   };
-  
-  // User routes
+
+  // User routes with proper error handling
   apiRouter.post("/auth/register", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const existingUser = await storage.getUserByUsername(userData.username);
-      
+
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
-      
+
       // Hash password before storing
       const hashedPassword = await hashPassword(userData.password);
-      
+
       const user = await storage.createUser({
         ...userData,
         password: hashedPassword
       });
-      
-      req.session.userId = user.id;
-      
+
+      if (req.session) {
+        req.session.userId = user.id;
+      }
+
       return res.status(201).json({ 
         id: user.id,
         username: user.username,
@@ -130,22 +133,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Register error:", error);
-      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
       const user = await storage.getUserByUsername(username);
-      
+
       if (!user) {
         return res.status(401).json({ message: "Invalid username or password" });
       }
-      
-      // For the existing sample user with plain-text password
+
       let passwordValid = false;
-      
+
       if (user.password.includes('.')) {
         // Hashed password with salt
         passwordValid = await comparePasswords(password, user.password);
@@ -153,13 +158,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Plain text password (only for existing records)
         passwordValid = user.password === password;
       }
-      
+
       if (!passwordValid) {
         return res.status(401).json({ message: "Invalid username or password" });
       }
-      
-      req.session.userId = user.id;
-      
+
+      if (req.session) {
+        req.session.userId = user.id;
+      }
+
       return res.status(200).json({ 
         id: user.id,
         username: user.username,
@@ -167,32 +174,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Login error:", error);
-      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Failed to logout" });
-      }
-      res.status(200).json({ message: "Logged out successfully" });
-    });
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).json({ message: "Failed to logout" });
+        }
+        res.status(200).json({ message: "Logged out successfully" });
+      });
+    } else {
+      res.status(200).json({ message: "Already logged out" });
+    }
   });
-  
+
   apiRouter.get("/auth/user", requireAuth, async (req, res) => {
     try {
-      // Ensure we have a valid userId
-      if (!req.session.userId) {
+      const userId = req.session.userId;
+      if (!userId) {
         return res.status(401).json({ message: "Authentication required" });
       }
-      
-      const user = await storage.getUser(req.session.userId);
-      
+
+      const user = await storage.getUser(userId);
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       return res.status(200).json({
         id: user.id,
         username: user.username,
@@ -204,17 +218,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Get user error:", error);
-      return res.status(400).json({ message: error instanceof Error ? error.message : String(error) });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.patch("/auth/user", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
       const updates = req.body;
       
-      const user = await storage.updateUser(userId, updates);
-      
+      const user = await storage.updateUser(userId!, updates); // userId! is safe here because requireAuth ensures it's defined.
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -230,7 +247,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Update user error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
   
@@ -242,10 +262,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(jobs);
     } catch (error) {
       console.error("Get jobs error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.get("/jobs/:id", async (req, res) => {
     try {
       const jobId = parseInt(req.params.id);
@@ -258,10 +281,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(job);
     } catch (error) {
       console.error("Get job error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/jobs/scrape", async (req, res) => {
     try {
       const results = await scrapeAssameseJobPortals();
@@ -280,38 +306,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Job scraping error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Application routes
   apiRouter.get("/applications", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const applications = await storage.getUserApplications(userId);
+      const applications = await storage.getUserApplications(userId!); // userId! is safe here because requireAuth ensures it's defined.
       return res.status(200).json(applications);
     } catch (error) {
       console.error("Get applications error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/applications", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
       const applicationData = insertApplicationSchema.parse({
         ...req.body,
-        userId
+        userId: userId! // userId! is safe here because requireAuth ensures it's defined.
       });
       
       const application = await storage.createApplication(applicationData);
       return res.status(201).json(application);
     } catch (error) {
       console.error("Create application error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.patch("/applications/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
@@ -332,38 +367,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(updatedApplication);
     } catch (error) {
       console.error("Update application error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Social links routes
   apiRouter.get("/social-links", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const links = await storage.getUserSocialLinks(userId);
+      const links = await storage.getUserSocialLinks(userId!); // userId! is safe here because requireAuth ensures it's defined.
       return res.status(200).json(links);
     } catch (error) {
       console.error("Get social links error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/social-links", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
       const linkData = insertSocialLinkSchema.parse({
         ...req.body,
-        userId
+        userId: userId! // userId! is safe here because requireAuth ensures it's defined.
       });
       
       const link = await storage.createSocialLink(linkData);
       return res.status(201).json(link);
     } catch (error) {
       console.error("Create social link error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.patch("/social-links/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
@@ -383,10 +427,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(link);
     } catch (error) {
       console.error("Update social link error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.delete("/social-links/:id", requireAuth, async (req, res) => {
     try {
       const linkId = parseInt(req.params.id);
@@ -399,22 +446,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ message: "Link deleted successfully" });
     } catch (error) {
       console.error("Delete social link error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Document routes
   apiRouter.get("/documents", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const documents = await storage.getUserDocuments(userId);
+      const documents = await storage.getUserDocuments(userId!); // userId! is safe here because requireAuth ensures it's defined.
       return res.status(200).json(documents);
     } catch (error) {
       console.error("Get documents error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/documents", requireAuth, upload.single("file"), async (req, res) => {
     try {
       const userId = req.session.userId;
@@ -431,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const driveFile = await uploadFileToDrive(fileBuffer, fileName, mimeType);
       
       const documentData = insertDocumentSchema.parse({
-        userId,
+        userId: userId!, // userId! is safe here because requireAuth ensures it's defined.
         name: fileName,
         fileUrl: driveFile.webViewLink,
         fileType: mimeType,
@@ -442,10 +495,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(201).json(document);
     } catch (error) {
       console.error("Upload document error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.delete("/documents/:id", requireAuth, async (req, res) => {
     try {
       const documentId = parseInt(req.params.id);
@@ -458,10 +514,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ message: "Document deleted successfully" });
     } catch (error) {
       console.error("Delete document error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/documents/analyze-resume", requireAuth, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
@@ -475,28 +534,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(analysis);
     } catch (error) {
       console.error("Resume analysis error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Event routes
   apiRouter.get("/events", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const events = await storage.getUserEvents(userId);
+      const events = await storage.getUserEvents(userId!); // userId! is safe here because requireAuth ensures it's defined.
       return res.status(200).json(events);
     } catch (error) {
       console.error("Get events error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/events", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
       const eventData = insertEventSchema.parse({
         ...req.body,
-        userId
+        userId: userId! // userId! is safe here because requireAuth ensures it's defined.
       });
       
       // Create Google Calendar event (mock)
@@ -510,10 +575,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(201).json(event);
     } catch (error) {
       console.error("Create event error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.patch("/events/:id", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
@@ -538,10 +606,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(updatedEvent);
     } catch (error) {
       console.error("Update event error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.delete("/events/:id", requireAuth, async (req, res) => {
     try {
       const eventId = parseInt(req.params.id);
@@ -564,10 +635,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ message: "Event deleted successfully" });
     } catch (error) {
       console.error("Delete event error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Google Calendar integration
   apiRouter.get("/calendar/sync", requireAuth, async (req, res) => {
     try {
@@ -579,10 +653,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(events);
     } catch (error) {
       console.error("Calendar sync error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // Job tracking with Google Sheets
   apiRouter.get("/job-tracker", requireAuth, async (req, res) => {
     try {
@@ -592,10 +669,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(trackingData);
     } catch (error) {
       console.error("Job tracker error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/job-tracker", requireAuth, async (req, res) => {
     try {
       // In a real app, would store the sheet ID in the user profile
@@ -604,10 +684,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ message: "Job added to tracker" });
     } catch (error) {
       console.error("Job tracker add error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   // AI routes
   apiRouter.post("/ai/analyze-job", async (req, res) => {
     try {
@@ -621,10 +704,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(analysis);
     } catch (error) {
       console.error("Job analysis error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/ai/interview-questions", async (req, res) => {
     try {
       const jobDetails = req.body;
@@ -637,10 +723,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ questions });
     } catch (error) {
       console.error("Interview questions error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.post("/ai/chat", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
@@ -652,17 +741,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Save user message
       await storage.createChatMessage({
-        userId,
+        userId: userId!, // userId! is safe here because requireAuth ensures it's defined.
         content: message,
         isFromUser: true
       });
       
       // Get AI response
-      const aiResponse = await getAIResponse(userId, message);
+      const aiResponse = await getAIResponse(userId!, message);
       
       // Save AI response
       const savedResponse = await storage.createChatMessage({
-        userId,
+        userId: userId!, // userId! is safe here because requireAuth ensures it's defined.
         content: aiResponse,
         isFromUser: false
       });
@@ -670,22 +759,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json(savedResponse);
     } catch (error) {
       console.error("AI chat error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
+
   apiRouter.get("/ai/chat-history", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const messages = await storage.getUserChatMessages(userId);
+      const messages = await storage.getUserChatMessages(userId!); // userId! is safe here because requireAuth ensures it's defined.
       return res.status(200).json(messages);
     } catch (error) {
       console.error("Chat history error:", error);
-      return res.status(400).json({ message: error.message });
+      if (error instanceof Error) {
+        return res.status(400).json({ message: error.message });
+      }
+      return res.status(500).json({ message: "An unexpected error occurred" });
     }
   });
-  
-  const httpServer = createServer(app);
 
+  const httpServer = createServer(app);
   return httpServer;
 }
