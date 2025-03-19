@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "wouter";
+import { useLocation } from "wouter";
 
 interface SocialButtonProps {
   platform: string;
@@ -33,7 +33,7 @@ const SocialButton = ({ platform, url, displayName }: SocialButtonProps) => {
         return <Globe size={16} className="mr-1" />;
     }
   };
-  
+
   const getColorClass = () => {
     switch (platform.toLowerCase()) {
       case 'linkedin':
@@ -48,11 +48,11 @@ const SocialButton = ({ platform, url, displayName }: SocialButtonProps) => {
         return "bg-gray-50 text-gray-600 hover:bg-gray-100";
     }
   };
-  
+
   return (
-    <a 
-      href={url} 
-      target="_blank" 
+    <a
+      href={url}
+      target="_blank"
       rel="noopener noreferrer"
       className={`flex items-center px-3 py-1 rounded-full text-sm transition ${getColorClass()}`}
     >
@@ -71,7 +71,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
   const [url, setUrl] = useState("");
   const [displayName, setDisplayName] = useState("");
   const { toast } = useToast();
-  
+
   const addSocialLink = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/social-links", {
@@ -96,7 +96,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
       });
     }
   });
-  
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) {
@@ -109,7 +109,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
     }
     addSocialLink.mutate();
   };
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -128,7 +128,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
           <option value="Facebook">Facebook</option>
         </select>
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="url">URL</Label>
         <Input
@@ -140,7 +140,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
           required
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="displayName">Display Name (Optional)</Label>
         <Input
@@ -150,7 +150,7 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
           onChange={(e) => setDisplayName(e.target.value)}
         />
       </div>
-      
+
       <div className="flex justify-end space-x-2">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
@@ -165,47 +165,47 @@ const AddSocialLinkForm = ({ onClose }: AddSocialLinkFormProps) => {
 
 const ProfileBio = () => {
   const [isAddSocialOpen, setIsAddSocialOpen] = useState(false);
-  const [, navigate] = useRouter();
-  
+  const [, setLocation] = useLocation();
+
   const { data: user } = useQuery<User>({
     queryKey: ["/api/auth/user"],
   });
-  
+
   const { data: socialLinks } = useQuery<SocialLink[]>({
     queryKey: ["/api/social-links"],
   });
-  
+
   const { data: applications } = useQuery({
     queryKey: ["/api/applications"],
   });
-  
+
   const statistics = {
     applications: applications?.length || 0,
     interviews: applications?.filter(app => app.status === "Interview Scheduled").length || 0,
-    profileComplete: 85, // This would be calculated based on user profile completeness
+    profileComplete: 85, 
   };
-  
+
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
       <div className="bg-gradient-to-r from-primary-600 to-primary-700 h-24"></div>
       <div className="px-6 pb-6">
         <div className="flex justify-center">
           <Avatar className="w-20 h-20 border-4 border-white -mt-10">
-            <AvatarImage 
-              src={user?.profilePicture || "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80"} 
-              alt={user?.name || "User"} 
+            <AvatarImage
+              src={user?.profilePicture || "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80"}
+              alt={user?.name || "User"}
             />
             <AvatarFallback>
               <UserIcon size={32} />
             </AvatarFallback>
           </Avatar>
         </div>
-        
+
         <div className="text-center mt-3">
           <h3 className="font-heading font-bold text-gray-900">{user?.name || "User"}</h3>
           <p className="text-gray-500 text-sm">{user?.bio || "No bio provided"}</p>
         </div>
-        
+
         <div className="mt-6 grid grid-cols-3 text-center border-y border-gray-100 py-3">
           <div>
             <p className="text-gray-900 font-semibold">{statistics.applications}</p>
@@ -220,7 +220,7 @@ const ProfileBio = () => {
             <p className="text-xs text-gray-500">Profile Complete</p>
           </div>
         </div>
-        
+
         <div className="mt-6">
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-sm font-medium text-gray-700">My Social Profiles</h4>
@@ -238,7 +238,7 @@ const ProfileBio = () => {
               </DialogContent>
             </Dialog>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             {socialLinks && socialLinks.length > 0 ? (
               socialLinks.map(link => (
@@ -254,12 +254,12 @@ const ProfileBio = () => {
             )}
           </div>
         </div>
-        
+
         <div className="mt-6">
-          <Button 
+          <Button
             variant="outline"
             className="w-full"
-            onClick={() => navigate("/profile")}
+            onClick={() => setLocation("/profile")}
           >
             Edit Profile
           </Button>
