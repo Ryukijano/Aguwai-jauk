@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox";
 import { Briefcase, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/lib/auth-provider";
+import { queryClient } from "@/lib/queryClient";
 
 const loginSchema = z.object({
   username: z.string().min(1, { message: "Username is required" }),
@@ -34,10 +35,6 @@ const Login = () => {
   const { toast } = useToast();
   const { login } = useAuth();
 
-  // Get the redirect path from URL params
-  const params = new URLSearchParams(window.location.search);
-  const redirectTo = params.get("redirect") || "/";
-
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -50,13 +47,24 @@ const Login = () => {
   const onSubmit = async (values: LoginValues) => {
     try {
       setIsLoading(true);
+      console.log("Attempting login...");
+
       await login({
         username: values.username,
         password: values.password,
       });
-      navigate(redirectTo);
+
+      console.log("Login successful, invalidating queries...");
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+
+      console.log("Navigating to dashboard...");
+      navigate("/");
+
+      toast({
+        title: "Login successful",
+        description: "Welcome to Aguwai Jauk!",
+      });
     } catch (error) {
-      // Error is already handled by the auth provider
       console.error("Login error:", error);
       toast({
         title: "Login failed",

@@ -79,8 +79,15 @@ export function setupAuth(app: Express) {
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
     try {
+      console.log("Registration attempt:", {
+        username: req.body.username,
+        name: req.body.name,
+        email: req.body.email
+      });
+
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
+        console.log("Registration failed: Username already exists");
         return res.status(400).json({ message: "Username already exists" });
       }
 
@@ -88,6 +95,12 @@ export function setupAuth(app: Express) {
       const user = await storage.createUser({
         ...req.body,
         password: hashedPassword
+      });
+
+      console.log("User created successfully:", {
+        id: user.id,
+        username: user.username,
+        name: user.name
       });
 
       req.login(user, (err) => {
