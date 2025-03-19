@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useLocation, useRouter } from "wouter";
+import { useLocation } from "wouter";
 
 interface HeaderProps {
   onOpenMobileMenu: () => void;
@@ -22,22 +22,22 @@ interface HeaderProps {
 const Header = ({ onOpenMobileMenu }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
-  const [, navigate] = useLocation();
-  
+  const [, setLocation] = useLocation();
+
   const { data: user } = useQuery({
     queryKey: ["/api/auth/user"],
     enabled: true,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
-  
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/jobs?search=${encodeURIComponent(searchQuery)}`);
+      setLocation(`/jobs?search=${encodeURIComponent(searchQuery)}`);
     }
   };
-  
+
   const handleLogout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout", {});
@@ -45,7 +45,7 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
         title: "Logged out successfully",
         description: "You have been logged out of your account",
       });
-      navigate("/login");
+      setLocation("/login");
     } catch (error) {
       toast({
         title: "Error",
@@ -54,7 +54,7 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
       });
     }
   };
-  
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -66,7 +66,7 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
             <Menu size={24} />
           </button>
         </div>
-        
+
         <div className="ml-4 md:ml-0 relative">
           <form onSubmit={handleSearch} className="flex items-center">
             <div className="relative">
@@ -84,7 +84,7 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
             </div>
           </form>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           <button className="text-gray-500 hover:text-primary-500">
             <Bell size={20} />
@@ -92,7 +92,7 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
           <button className="text-gray-500 hover:text-primary-500">
             <Mail size={20} />
           </button>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="focus:outline-none">
@@ -110,10 +110,10 @@ const Header = ({ onOpenMobileMenu }: HeaderProps) => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/profile")}>
+              <DropdownMenuItem onClick={() => setLocation("/profile")}>
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <DropdownMenuItem onClick={() => setLocation("/settings")}>
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />

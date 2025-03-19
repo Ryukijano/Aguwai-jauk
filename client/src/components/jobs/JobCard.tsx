@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { useRouter } from "wouter";
+import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
 interface JobCardProps {
@@ -23,8 +23,8 @@ interface JobCardProps {
 const JobCard = ({ job }: JobCardProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const [, navigate] = useRouter();
-  
+  const [, setLocation] = useLocation();
+
   const getJobIcon = () => {
     const category = job.title.toLowerCase();
     if (category.includes("mathematics") || category.includes("math")) {
@@ -37,7 +37,7 @@ const JobCard = ({ job }: JobCardProps) => {
       return <GraduationCap className="text-xl" />;
     }
   };
-  
+
   const getJobIconColor = () => {
     const category = job.title.toLowerCase();
     if (category.includes("mathematics") || category.includes("math")) {
@@ -50,12 +50,12 @@ const JobCard = ({ job }: JobCardProps) => {
       return "bg-blue-100 text-blue-700";
     }
   };
-  
+
   const getDeadlineStatus = () => {
     const deadline = new Date(job.applicationDeadline);
     const today = new Date();
     const differenceInDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 3600 * 24));
-    
+
     if (differenceInDays <= 3) {
       return { text: `${differenceInDays} days left`, color: "text-red-500" };
     } else if (differenceInDays <= 7) {
@@ -64,9 +64,9 @@ const JobCard = ({ job }: JobCardProps) => {
       return { text: `${differenceInDays} days left`, color: "text-gray-500" };
     }
   };
-  
+
   const deadlineStatus = getDeadlineStatus();
-  
+
   const handleApply = async () => {
     try {
       setIsLoading(true);
@@ -74,15 +74,15 @@ const JobCard = ({ job }: JobCardProps) => {
         jobId: job.id,
         status: "Applied"
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
-      
+
       toast({
         title: "Application submitted",
         description: `You've successfully applied for ${job.title}`,
       });
-      
-      navigate("/applications");
+
+      setLocation("/applications");
     } catch (error) {
       toast({
         title: "Error",
@@ -93,11 +93,11 @@ const JobCard = ({ job }: JobCardProps) => {
       setIsLoading(false);
     }
   };
-  
+
   const viewJobDetails = () => {
-    navigate(`/jobs/${job.id}`);
+    setLocation(`/jobs/${job.id}`);
   };
-  
+
   return (
     <div className="p-6 border-b border-gray-100 hover:bg-gray-50 transition group">
       <div className="flex items-start justify-between">
