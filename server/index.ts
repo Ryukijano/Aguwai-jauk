@@ -18,7 +18,7 @@ const sessionSettings: session.SessionOptions = {
   saveUninitialized: false,
   store: storage.sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === "production",
+    secure: false, // Set to false for development
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: "lax"
@@ -48,6 +48,7 @@ app.use((req, res, next) => {
       sessionID: req.sessionID,
       isAuthenticated: req.isAuthenticated?.(),
       user: req.user,
+      cookies: req.headers.cookie
     });
   }
 
@@ -58,11 +59,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
       log(logLine);
     }
   });
@@ -81,8 +77,6 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    // Don't throw after sending response
     res.status(status).json({ message });
     console.error(err);
   });
