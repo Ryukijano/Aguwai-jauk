@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import MainLayout from "@/components/layout/MainLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
@@ -8,41 +8,46 @@ import ProfileBio from "@/components/dashboard/ProfileBio";
 import CalendarWidget from "@/components/dashboard/CalendarWidget";
 import AIChatWidget from "@/components/dashboard/AIChatWidget";
 import { Briefcase, FileText, CalendarCheck, Bell } from "lucide-react";
-import { Stat, User } from "@/lib/types";
+import { Stat, User, JobListing, Application, Event } from "@/lib/types";
 
 const Dashboard = () => {
+  // Provide default values and proper error handling for queries
   const { data: user } = useQuery<User>({
     queryKey: ["/api/auth/user"],
+    retry: false // Don't retry on auth failures
   });
-  
-  const { data: jobs } = useQuery({
+
+  const { data: jobs = [], error: jobsError } = useQuery<JobListing[]>({
     queryKey: ["/api/jobs"],
+    retry: false
   });
-  
-  const { data: applications } = useQuery({
+
+  const { data: applications = [], error: applicationsError } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
+    retry: false
   });
-  
-  const { data: events } = useQuery({
+
+  const { data: events = [], error: eventsError } = useQuery<Event[]>({
     queryKey: ["/api/events"],
+    retry: false
   });
-  
-  // Calculate upcoming deadlines
-  const upcomingDeadlines = jobs?.filter(job => {
+
+  // Calculate upcoming deadlines safely
+  const upcomingDeadlines = jobs.filter(job => {
     const deadline = new Date(job.applicationDeadline);
     const today = new Date();
     return deadline > today && ((deadline.getTime() - today.getTime()) / (1000 * 3600 * 24)) <= 7;
-  }).length || 0;
-  
-  // Get interview count from applications
-  const interviewCount = applications?.filter(app => 
+  }).length;
+
+  // Get interview count safely
+  const interviewCount = applications.filter(app => 
     app.status === "Interview Scheduled" && app.interviewDate
-  ).length || 0;
-  
+  ).length;
+
   const stats: Stat[] = [
     {
       label: "Available Jobs",
-      value: jobs?.length || 0,
+      value: jobs.length,
       icon: "briefcase",
       color: "primary",
       trend: {
@@ -53,7 +58,7 @@ const Dashboard = () => {
     },
     {
       label: "Applications",
-      value: applications?.length || 0,
+      value: applications.length,
       icon: "file-text",
       color: "secondary",
       trend: {
@@ -68,7 +73,7 @@ const Dashboard = () => {
       icon: "calendar-check",
       color: "accent",
       trend: {
-        value: `Next: ${events && events.length > 0 ? new Date(events[0].startTime).toLocaleDateString() : 'None'}`,
+        value: `Next: ${events.length > 0 ? new Date(events[0].startTime).toLocaleDateString() : 'None'}`,
         direction: "neutral",
         label: ""
       }
@@ -85,16 +90,16 @@ const Dashboard = () => {
       }
     }
   ];
-  
+
   return (
     <MainLayout>
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl shadow-md text-white p-6 mb-8">
+      <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl shadow-md p-6 mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
-            <h1 className="text-3xl font-heading font-bold mb-2">Welcome back, {user?.name || "Teacher"}</h1>
-            <p className="text-white/90 font-medium">
-              You have {applications?.length || 0} pending applications and {jobs?.length || 0} new teaching jobs matching your profile.
+            <h1 className="text-3xl font-heading font-bold mb-2 text-white">Welcome back, {user?.name || "Teacher"}</h1>
+            <p className="text-gray-900 font-medium">
+              You have {applications.length} pending applications and {jobs.length} new teaching jobs matching your profile.
             </p>
           </div>
           <div className="mt-4 md:mt-0">
@@ -129,7 +134,7 @@ const Dashboard = () => {
           <JobListingsSection limit={3} showFilters={true} showViewAll={true} />
           <AIInsights />
         </div>
-        
+
         {/* Right Column - Profile, Calendar and AI Chat */}
         <div className="space-y-6">
           <ProfileBio />
