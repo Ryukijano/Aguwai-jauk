@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bot, Send, Paperclip } from "lucide-react";
+import { Bot, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatMessage } from "@/lib/types";
@@ -41,6 +41,26 @@ const AIChatWidget = () => {
     },
   });
 
+  const clearChat = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/ai/chat-history");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
+      toast({
+        title: "Chat cleared",
+        description: "Your chat history has been cleared.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to clear chat history. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -54,6 +74,10 @@ const AIChatWidget = () => {
     if (message.trim()) {
       sendMessage.mutate(message);
     }
+  };
+
+  const handleClearChat = () => {
+    clearChat.mutate();
   };
 
   // Format time for messages
@@ -73,8 +97,19 @@ const AIChatWidget = () => {
             <span className="bg-primary-500 w-2 h-2 rounded-full mr-2 animate-pulse"></span>
             AI Assistant
           </h2>
-          <div className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-            Online
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-500 hover:text-red-500"
+              onClick={handleClearChat}
+              disabled={clearChat.isPending || messages.length === 0}
+            >
+              <Trash2 size={16} />
+            </Button>
+            <div className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+              Online
+            </div>
           </div>
         </div>
       </div>

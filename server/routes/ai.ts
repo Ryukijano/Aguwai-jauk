@@ -69,4 +69,19 @@ router.get("/chat-history", async (req, res) => {
   }
 });
 
+// Clear chat history
+router.delete("/chat-history", async (req, res) => {
+  try {
+    await memory.clear();
+    res.json({ message: "Chat history cleared successfully" });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Clear Chat History Error:", error);
+    res.status(500).json({ 
+      error: "Failed to clear chat history",
+      details: error.message 
+    });
+  }
+});
+
 export default router;
