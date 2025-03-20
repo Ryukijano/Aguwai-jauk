@@ -93,7 +93,7 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
             <h1 className="text-3xl font-heading font-bold mb-2">Welcome back, {user?.name || "Teacher"}</h1>
-            <p className="text-primary-100">
+            <p className="text-white/90 font-medium">
               You have {applications?.length || 0} pending applications and {jobs?.length || 0} new teaching jobs matching your profile.
             </p>
           </div>
