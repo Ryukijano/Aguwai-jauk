@@ -1,4 +1,4 @@
-import express, { type Express, Request, Response, NextFunction } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
@@ -7,6 +7,36 @@ import memorystore from "memorystore";
 import { storage } from "./storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { 
+  insertUserSchema, 
+  insertJobListingSchema, 
+  insertApplicationSchema,
+  insertSocialLinkSchema,
+  insertDocumentSchema,
+  insertEventSchema,
+  insertChatMessageSchema
+} from "@shared/schema";
+import { scrapeAssameseJobPortals } from "./scrapers";
+import { 
+  analyzeJobDescription, 
+  generateInterviewQuestions, 
+  getAIResponse,
+  suggestResumeImprovements
+} from "./openai";
+import {
+  createCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  listCalendarEvents,
+  uploadFileToDrive,
+  getFileFromDrive,
+  deleteFileFromDrive,
+  createJobTrackingSheet,
+  appendJobToSheet,
+  getJobTrackingData
+} from "./googleApi";
+import aiRoutes from "./routes/ai";
+
 
 // Promisify scrypt
 const scryptAsync = promisify(scrypt);
@@ -39,34 +69,6 @@ declare module "express" {
     session: session.Session & { userId?: number };
   }
 }
-import { 
-  insertUserSchema, 
-  insertJobListingSchema, 
-  insertApplicationSchema,
-  insertSocialLinkSchema,
-  insertDocumentSchema,
-  insertEventSchema,
-  insertChatMessageSchema
-} from "@shared/schema";
-import { scrapeAssameseJobPortals } from "./scrapers";
-import { 
-  analyzeJobDescription, 
-  generateInterviewQuestions, 
-  getAIResponse,
-  suggestResumeImprovements
-} from "./openai";
-import {
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
-  listCalendarEvents,
-  uploadFileToDrive,
-  getFileFromDrive,
-  deleteFileFromDrive,
-  createJobTrackingSheet,
-  appendJobToSheet,
-  getJobTrackingData
-} from "./googleApi";
 
 // Set up multer storage for file uploads
 const storage_config = multer.memoryStorage();
@@ -79,6 +81,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up API routes
   const apiRouter = express.Router();
   app.use("/api", apiRouter);
+
+  // Register the AI routes
+  apiRouter.use("/ai", aiRoutes);
 
   // Enable sessions
   const MemoryStore = memorystore(session);
@@ -783,3 +788,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+
+import { Request, Response, NextFunction } from "express";
