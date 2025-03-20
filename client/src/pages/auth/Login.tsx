@@ -29,7 +29,7 @@ const loginSchema = z.object({
 type LoginValues = z.infer<typeof loginSchema>;
 
 const Login = () => {
-  const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
@@ -58,12 +58,12 @@ const Login = () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
 
       console.log("Navigating to dashboard...");
-      navigate("/");
-
       toast({
         title: "Login successful",
         description: "Welcome to Aguwai Jauk!",
       });
+
+      setLocation("/");
     } catch (error) {
       console.error("Login error:", error);
       toast({
@@ -161,12 +161,12 @@ const Login = () => {
                     )}
                   />
 
-                  <a
-                    href="#"
+                  <Link
+                    href="/forgot-password"
                     className="text-sm font-medium text-primary-500 hover:text-primary-600"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isLoading}>
@@ -188,13 +188,13 @@ const Login = () => {
         <div className="mt-8 text-center">
           <p className="text-xs text-gray-500">
             By signing in, you agree to our{" "}
-            <a href="#" className="underline">
+            <Link href="/terms" className="underline">
               Terms of Service
-            </a>{" "}
-            and{" "}
-            <a href="#" className="underline">
+            </Link>
+            {" "}and{" "}
+            <Link href="/privacy" className="underline">
               Privacy Policy
-            </a>
+            </Link>
           </p>
         </div>
       </div>

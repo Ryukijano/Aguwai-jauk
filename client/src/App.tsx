@@ -24,14 +24,30 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
 
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/jobs" component={JobListings} />
-      <ProtectedRoute path="/applications" component={Applications} />
-      <ProtectedRoute path="/ai-assistant" component={AIAssistant} />
-      <ProtectedRoute path="/calendar" component={Calendar} />
-      <ProtectedRoute path="/documents" component={Documents} />
-      <ProtectedRoute path="/job-tracker" component={JobTracker} />
-      <ProtectedRoute path="/profile" component={Profile} />
+      <Route path="/">
+        <ProtectedRoute component={Dashboard} />
+      </Route>
+      <Route path="/jobs">
+        <ProtectedRoute component={JobListings} />
+      </Route>
+      <Route path="/applications">
+        <ProtectedRoute component={Applications} />
+      </Route>
+      <Route path="/ai-assistant">
+        <ProtectedRoute component={AIAssistant} />
+      </Route>
+      <Route path="/calendar">
+        <ProtectedRoute component={Calendar} />
+      </Route>
+      <Route path="/documents">
+        <ProtectedRoute component={Documents} />
+      </Route>
+      <Route path="/job-tracker">
+        <ProtectedRoute component={JobTracker} />
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute component={Profile} />
+      </Route>
 
       <Route component={NotFound} />
     </Switch>
