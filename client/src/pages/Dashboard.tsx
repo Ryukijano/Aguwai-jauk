@@ -11,43 +11,44 @@ import { Briefcase, FileText, CalendarCheck, Bell } from "lucide-react";
 import { Stat, User, JobListing, Application, Event } from "@/lib/types";
 
 const Dashboard = () => {
-  // Provide default values and proper error handling for queries
+  // Provide default values and handle errors gracefully
   const { data: user } = useQuery<User>({
     queryKey: ["/api/auth/user"],
-    retry: false // Don't retry on auth failures
+    retry: false,
   });
 
-  const { data: jobs = [], error: jobsError } = useQuery<JobListing[]>({
+  const { data: jobs = [], isLoading: isLoadingJobs } = useQuery<JobListing[]>({
     queryKey: ["/api/jobs"],
-    retry: false
+    retry: false,
   });
 
-  const { data: applications = [], error: applicationsError } = useQuery<Application[]>({
+  const { data: applications = [], isLoading: isLoadingApplications } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
-    retry: false
+    retry: false,
   });
 
-  const { data: events = [], error: eventsError } = useQuery<Event[]>({
+  const { data: events = [], isLoading: isLoadingEvents } = useQuery<Event[]>({
     queryKey: ["/api/events"],
-    retry: false
+    retry: false,
   });
 
   // Calculate upcoming deadlines safely
-  const upcomingDeadlines = jobs.filter(job => {
+  const upcomingDeadlines = Array.isArray(jobs) ? jobs.filter(job => {
+    if (!job?.applicationDeadline) return false;
     const deadline = new Date(job.applicationDeadline);
     const today = new Date();
     return deadline > today && ((deadline.getTime() - today.getTime()) / (1000 * 3600 * 24)) <= 7;
-  }).length;
+  }).length : 0;
 
   // Get interview count safely
-  const interviewCount = applications.filter(app => 
-    app.status === "Interview Scheduled" && app.interviewDate
-  ).length;
+  const interviewCount = Array.isArray(applications) ? applications.filter(app => 
+    app?.status === "Interview Scheduled" && app?.interviewDate
+  ).length : 0;
 
   const stats: Stat[] = [
     {
       label: "Available Jobs",
-      value: jobs.length,
+      value: Array.isArray(jobs) ? jobs.length : 0,
       icon: "briefcase",
       color: "primary",
       trend: {
@@ -58,7 +59,7 @@ const Dashboard = () => {
     },
     {
       label: "Applications",
-      value: applications.length,
+      value: Array.isArray(applications) ? applications.length : 0,
       icon: "file-text",
       color: "secondary",
       trend: {
@@ -73,7 +74,9 @@ const Dashboard = () => {
       icon: "calendar-check",
       color: "accent",
       trend: {
-        value: `Next: ${events.length > 0 ? new Date(events[0].startTime).toLocaleDateString() : 'None'}`,
+        value: Array.isArray(events) && events.length > 0 && events[0]?.startTime
+          ? `Next: ${new Date(events[0].startTime).toLocaleDateString()}`
+          : 'None',
         direction: "neutral",
         label: ""
       }
@@ -97,9 +100,12 @@ const Dashboard = () => {
       <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl shadow-md p-6 mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
-            <h1 className="text-3xl font-heading font-bold mb-2 text-white">Welcome back, {user?.name || "Teacher"}</h1>
+            <h1 className="text-3xl font-heading font-bold mb-2 text-white">
+              Welcome back, {user?.name || "Teacher"}
+            </h1>
             <p className="text-gray-900 font-medium">
-              You have {applications.length} pending applications and {jobs.length} new teaching jobs matching your profile.
+              You have {Array.isArray(applications) ? applications.length : 0} pending applications and{" "}
+              {Array.isArray(jobs) ? jobs.length : 0} new teaching jobs matching your profile.
             </p>
           </div>
           <div className="mt-4 md:mt-0">

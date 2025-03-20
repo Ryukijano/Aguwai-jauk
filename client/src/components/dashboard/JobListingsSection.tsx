@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import JobCard from "@/components/jobs/JobCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,11 +68,12 @@ const JobListingsSection = ({
 }: JobListingsSectionProps) => {
   const [activeFilter, setActiveFilter] = useState<string>("All Jobs");
   const [displayCount, setDisplayCount] = useState(limit);
-  
-  const { data: jobs, isLoading } = useQuery<JobListing[]>({
+  const [, navigate] = useLocation();
+
+  const { data: jobs = [], isLoading } = useQuery<JobListing[]>({
     queryKey: ["/api/jobs"],
   });
-  
+
   const filters = [
     "All Jobs", 
     "Government", 
@@ -80,8 +81,8 @@ const JobListingsSection = ({
     "Primary", 
     "Secondary"
   ];
-  
-  const filteredJobs = jobs?.filter(job => {
+
+  const filteredJobs = Array.isArray(jobs) ? jobs.filter(job => {
     if (activeFilter === "All Jobs") return true;
     if (activeFilter === "Government" || activeFilter === "Private") {
       return job.category === activeFilter;
@@ -90,29 +91,36 @@ const JobListingsSection = ({
       return job.tags?.includes(activeFilter);
     }
     return true;
-  });
-  
-  const displayJobs = filteredJobs?.slice(0, displayCount);
-  
+  }) : [];
+
+  const displayJobs = filteredJobs.slice(0, displayCount);
+
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + 3);
   };
-  
+
+  const handleViewAllClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    navigate("/jobs");
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
       <div className="p-6 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-heading font-semibold text-gray-800">{title}</h2>
           {showViewAll && (
-            <Link href="/jobs">
-              <a className="text-primary-500 hover:text-primary-600 text-sm font-medium">
-                View All
-              </a>
-            </Link>
+            <Button
+              variant="link"
+              className="text-primary-500 hover:text-primary-600 text-sm font-medium"
+              onClick={handleViewAllClick}
+            >
+              View All
+            </Button>
           )}
         </div>
       </div>
-      
+
       {showFilters && (
         <div className="p-4 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2">
           {filters.map(filter => (
@@ -125,20 +133,20 @@ const JobListingsSection = ({
           ))}
         </div>
       )}
-      
+
       {isLoading ? (
         <>
           <JobListingSkeleton />
           <JobListingSkeleton />
           <JobListingSkeleton />
         </>
-      ) : displayJobs && displayJobs.length > 0 ? (
+      ) : displayJobs.length > 0 ? (
         <>
           {displayJobs.map(job => (
             <JobCard key={job.id} job={job} />
           ))}
-          
-          {filteredJobs && displayCount < filteredJobs.length && (
+
+          {filteredJobs.length > displayCount && (
             <div className="p-4 flex justify-center">
               <Button 
                 variant="link" 
