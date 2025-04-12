@@ -50,11 +50,19 @@ const EnhancedAIChatWidget = () => {
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  // Text message mutation
+  // Advanced text message mutation
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", "/api/ai/chat", { message });
-      return response.json();
+      try {
+        // First try the advanced OpenAI agent endpoint
+        const response = await apiRequest("POST", "/api/ai/advanced-chat", { message });
+        return response.json();
+      } catch (error) {
+        console.log("Advanced chat failed, falling back to standard API", error);
+        // Fall back to the standard assistant API if the advanced one fails
+        const response = await apiRequest("POST", "/api/ai/chat", { message });
+        return response.json();
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
@@ -73,22 +81,42 @@ const EnhancedAIChatWidget = () => {
     },
   });
 
-  // Voice message mutation
+  // Advanced voice message mutation
   const sendVoiceMessage = useMutation({
     mutationFn: async (audioBlob: Blob) => {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'voice-message.webm');
       
-      const response = await fetch('/api/ai/voice', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to send voice message');
+      try {
+        // First try the advanced endpoint
+        const response = await fetch('/api/ai/advanced-voice', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Advanced voice processing failed');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.log("Advanced voice processing failed, falling back to standard API", error);
+        
+        // If advanced processing fails, fall back to standard voice API
+        const fallbackFormData = new FormData();
+        fallbackFormData.append('audio', audioBlob, 'voice-message.webm');
+        
+        const fallbackResponse = await fetch('/api/ai/voice', {
+          method: 'POST',
+          body: fallbackFormData,
+        });
+        
+        if (!fallbackResponse.ok) {
+          throw new Error('Failed to send voice message');
+        }
+        
+        return await fallbackResponse.json();
       }
-      
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
@@ -106,23 +134,44 @@ const EnhancedAIChatWidget = () => {
     },
   });
 
-  // Image analysis mutation
+  // Advanced image analysis mutation
   const analyzeImage = useMutation({
     mutationFn: async ({ image, prompt }: { image: File, prompt: string }) => {
       const formData = new FormData();
       formData.append('image', image);
       formData.append('prompt', prompt);
       
-      const response = await fetch('/api/ai/analyze-image', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to analyze image');
+      try {
+        // First try the advanced endpoint
+        const response = await fetch('/api/ai/advanced-image', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Advanced image analysis failed');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.log("Advanced image analysis failed, falling back to standard API", error);
+        
+        // If advanced processing fails, fall back to standard image API
+        const fallbackFormData = new FormData();
+        fallbackFormData.append('image', image);
+        fallbackFormData.append('prompt', prompt);
+        
+        const fallbackResponse = await fetch('/api/ai/analyze-image', {
+          method: 'POST',
+          body: fallbackFormData,
+        });
+        
+        if (!fallbackResponse.ok) {
+          throw new Error('Failed to analyze image');
+        }
+        
+        return await fallbackResponse.json();
       }
-      
-      return response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });

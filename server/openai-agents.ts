@@ -1,8 +1,15 @@
 import OpenAI from "openai";
+import { OpenAIAgent } from "openai-agents";
 
-// Initialize OpenAI client
+// Initialize standard OpenAI client for basic operations
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Initialize enhanced OpenAIAgent for advanced capabilities
+const openaiAgent = new OpenAIAgent({
+  apiKey: process.env.OPENAI_API_KEY,
+  model: "gpt-4o", // Required parameter - using the latest model
 });
 
 // Create an enhanced Assistant for teachers in Assam
@@ -180,10 +187,170 @@ export async function uploadFile(filePath: string, purpose: "assistants" | "assi
   return file.id;
 }
 
-// Note: The openai-agents package doesn't seem to have the expected exports
-// We'll use the regular OpenAI Assistants API instead of Agent API
+// Create a new teacher agent using the OpenAIAgent from openai-agents SDK
+export async function createTeacherAgent() {
+  return openaiAgent.createAgent({
+    name: "Assam Teacher Career Guide",
+    description: "A specialized assistant for teachers in Assam providing personalized career guidance, job search, interview preparation, document creation, and regional insights.",
+    model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+    instructions: `
+You are an AI Assistant for Aguwai Jauk - a specialized job portal for teachers in Assam, India.
 
-// Process a voice directly with the Assistants API
+Your primary role is to provide personalized guidance to teachers looking for jobs in Assam. You offer:
+
+1. Job search assistance: Help users find relevant teaching positions based on their qualifications, location preferences, and career goals.
+2. Application advice: Provide guidance on preparing resumes, writing effective cover letters, and submitting strong applications.
+3. Interview preparation: Offer tips on common interview questions for teaching positions and strategies for demonstrating teaching skills.
+4. Career development: Suggest professional development opportunities, certifications, and skills that can enhance a teacher's prospects.
+5. Regional insights: Share information about educational institutions, living conditions, and cultural aspects of different regions in Assam.
+
+Always be respectful, culturally sensitive, and focus on providing accurate, practical information to help teachers advance their careers in Assam's education sector.
+    `,
+    tools: [
+      {
+        type: "search_retrieval",
+        provider: "bing", // The openai-agents library supports Bing for search
+      },
+      {
+        type: "vision", // The agent can analyze images
+      },
+      {
+        type: "audio", // The agent can process audio
+      },
+      {
+        type: "function", // Enable function calling
+        function: {
+          name: "search_job_listings",
+          description: "Search for teaching job listings based on criteria",
+          parameters: {
+            type: "object",
+            properties: {
+              location: {
+                type: "string",
+                description: "Location in Assam to search for jobs"
+              },
+              subject: {
+                type: "string",
+                description: "Academic subject like Mathematics, Science, etc."
+              }
+            },
+            required: []
+          }
+        }
+      }
+    ]
+  });
+}
+
+// Process a message with the Agent API
+export async function processAgentMessage(message: string) {
+  // Create agent if not already done
+  const agent = await createTeacherAgent();
+  
+  // Create a new thread for the conversation
+  const thread = await openaiAgent.createThread();
+  
+  // Add the user message to the thread
+  await openaiAgent.addMessage(thread.id, {
+    role: "user",
+    content: message
+  });
+  
+  // Run the agent on the thread
+  const run = await openaiAgent.runThread({
+    threadId: thread.id,
+    agentId: agent.id
+  });
+  
+  // Get all messages from the thread
+  const messages = await openaiAgent.getMessages(thread.id);
+  
+  return {
+    threadId: thread.id,
+    agentId: agent.id,
+    messages
+  };
+}
+
+// Process audio with the Agent API
+export async function processVoiceWithAgent(audioFilePath: string) {
+  const fs = require("fs");
+  
+  // Create agent if not already done
+  const agent = await createTeacherAgent();
+  
+  // Create a new thread for the conversation
+  const thread = await openaiAgent.createThread();
+  
+  // Upload the audio file
+  const file = await openaiAgent.uploadFile({
+    file: fs.createReadStream(audioFilePath),
+    purpose: "audio_understanding"
+  });
+  
+  // Add the audio file to the thread
+  await openaiAgent.addMessage(thread.id, {
+    role: "user",
+    content: null,
+    audio_file: file.id
+  });
+  
+  // Run the agent on the thread
+  const run = await openaiAgent.runThread({
+    threadId: thread.id,
+    agentId: agent.id
+  });
+  
+  // Get all messages from the thread
+  const messages = await openaiAgent.getMessages(thread.id);
+  
+  return {
+    threadId: thread.id,
+    agentId: agent.id,
+    messages
+  };
+}
+
+// Process image with the Agent API
+export async function processImageWithAgent(imageFilePath: string, prompt: string) {
+  const fs = require("fs");
+  
+  // Create agent if not already done
+  const agent = await createTeacherAgent();
+  
+  // Create a new thread for the conversation
+  const thread = await openaiAgent.createThread();
+  
+  // Upload the image file
+  const file = await openaiAgent.uploadFile({
+    file: fs.createReadStream(imageFilePath),
+    purpose: "vision_understanding"
+  });
+  
+  // Add the image file to the thread with the prompt
+  await openaiAgent.addMessage(thread.id, {
+    role: "user",
+    content: prompt,
+    image_file: file.id
+  });
+  
+  // Run the agent on the thread
+  const run = await openaiAgent.runThread({
+    threadId: thread.id,
+    agentId: agent.id
+  });
+  
+  // Get all messages from the thread
+  const messages = await openaiAgent.getMessages(thread.id);
+  
+  return {
+    threadId: thread.id,
+    agentId: agent.id,
+    messages
+  };
+}
+
+// Process a voice directly with the Assistants API (fallback method)
 export async function processVoiceWithAssistant(assistantId: string, threadId: string, audioFilePath: string) {
   // Upload the audio file
   const fileId = await uploadFile(audioFilePath, "assistants_input");
@@ -195,7 +362,7 @@ export async function processVoiceWithAssistant(assistantId: string, threadId: s
   return await runAssistant(assistantId, threadId);
 }
 
-// Process an image with the Assistants API
+// Process an image with the Assistants API (fallback method)
 export async function processImageWithAssistant(assistantId: string, threadId: string, imageFilePath: string, prompt: string) {
   // Upload the image file
   const fileId = await uploadFile(imageFilePath, "assistants_input");

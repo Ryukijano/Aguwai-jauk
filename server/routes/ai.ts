@@ -3,6 +3,11 @@ import multer from "multer";
 import { storage } from "../storage";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from 'url';
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { 
   createTeacherAssistant, 
   createThread, 
@@ -11,7 +16,10 @@ import {
   getThreadMessages,
   uploadFile,
   processVoiceWithAssistant,
-  processImageWithAssistant
+  processImageWithAssistant,
+  processAgentMessage,
+  processVoiceWithAgent,
+  processImageWithAgent
 } from "../openai-agents";
 
 const router = express.Router();
@@ -88,13 +96,13 @@ router.post("/chat", async (req, res) => {
     const messages = await runAssistant(assistantId, threadId);
     
     // Get the latest assistant message
-    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
     const latestMessage = assistantMessages[assistantMessages.length - 1];
     
     let content = "";
     if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
       // Handle text content
-      const textContent = latestMessage.content.find(c => c.type === 'text');
+      const textContent = latestMessage.content.find((c: any) => c.type === 'text');
       if (textContent && 'text' in textContent) {
         content = textContent.text.value;
       }
@@ -152,13 +160,13 @@ router.post("/voice", upload.single('audio'), async (req, res) => {
     const messages = await runAssistant(assistantId, threadId);
     
     // Get the latest assistant message
-    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
     const latestMessage = assistantMessages[assistantMessages.length - 1];
     
     let content = "";
     if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
       // Handle text content
-      const textContent = latestMessage.content.find(c => c.type === 'text');
+      const textContent = latestMessage.content.find((c: any) => c.type === 'text');
       if (textContent && 'text' in textContent) {
         content = textContent.text.value;
       }
@@ -209,13 +217,13 @@ router.post("/analyze-image", upload.single('image'), async (req, res) => {
     const messages = await runAssistant(assistantId, threadId);
     
     // Get the latest assistant message
-    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
     const latestMessage = assistantMessages[assistantMessages.length - 1];
     
     let content = "";
     if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
       // Handle text content
-      const textContent = latestMessage.content.find(c => c.type === 'text');
+      const textContent = latestMessage.content.find((c: any) => c.type === 'text');
       if (textContent && 'text' in textContent) {
         content = textContent.text.value;
       }
@@ -274,13 +282,13 @@ router.post("/analyze-document", upload.single('document'), async (req, res) => 
     const messages = await runAssistant(assistantId, threadId);
     
     // Get the latest assistant message
-    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
     const latestMessage = assistantMessages[assistantMessages.length - 1];
     
     let content = "";
     if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
       // Handle text content
-      const textContent = latestMessage.content.find(c => c.type === 'text');
+      const textContent = latestMessage.content.find((c: any) => c.type === 'text');
       if (textContent && 'text' in textContent) {
         content = textContent.text.value;
       }
@@ -319,10 +327,10 @@ router.get("/chat-history", async (req, res) => {
       const messages = await getThreadMessages(threadId);
       
       // Convert to our format
-      const formattedMessages = messages.map((msg, index) => {
+      const formattedMessages = messages.map((msg: any, index: number) => {
         let content = "";
         if (msg.content && msg.content.length > 0) {
-          const textContent = msg.content.find(c => c.type === 'text');
+          const textContent = msg.content.find((c: any) => c.type === 'text');
           if (textContent && 'text' in textContent) {
             content = textContent.text.value;
           }
@@ -372,6 +380,128 @@ router.delete("/chat-history", async (req, res) => {
     console.error("Clear Chat History Error:", error);
     res.status(500).json({ 
       error: "Failed to clear chat history",
+      details: error.message 
+    });
+  }
+});
+
+// Advanced chat endpoint using the OpenAIAgent implementation
+router.post("/advanced-chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+    const sessionId = req.session.id || 'anonymous';
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Process the message using the OpenAIAgent
+    const result = await processAgentMessage(message);
+    
+    // Get the latest assistant message
+    const assistantMessages = result.messages.filter((msg: any) => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    // Store the thread ID for this session
+    threadsBySession[sessionId] = result.threadId;
+    
+    // Store the messages in the database if a user is authenticated
+    if (req.session?.userId) {
+      await storage.createChatMessage({
+        userId: req.session.userId,
+        content: message,
+        isFromUser: true,
+      });
+
+      await storage.createChatMessage({
+        userId: req.session.userId,
+        content: latestMessage.content || "",
+        isFromUser: false,
+      });
+    }
+
+    res.json({ 
+      message: latestMessage.content || "",
+      threadId: result.threadId,
+      agentId: result.agentId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Advanced AI Chat Error:", error);
+    res.status(500).json({ 
+      error: "Failed to process advanced chat message",
+      details: error.message 
+    });
+  }
+});
+
+// Advanced voice chat endpoint using OpenAIAgent
+router.post("/advanced-voice", upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Audio file is required" });
+    }
+
+    // Process the voice using the OpenAIAgent
+    const result = await processVoiceWithAgent(req.file.path);
+    
+    // Get the latest assistant message
+    const assistantMessages = result.messages.filter((msg: any) => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json({ 
+      message: latestMessage.content || "",
+      threadId: result.threadId,
+      agentId: result.agentId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Advanced Voice Chat Error:", error);
+    res.status(500).json({ 
+      error: "Failed to process advanced voice message",
+      details: error.message 
+    });
+  }
+});
+
+// Advanced image analysis endpoint using OpenAIAgent
+router.post("/advanced-image", upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Image file is required" });
+    }
+
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Analysis prompt is required" });
+    }
+
+    // Process the image using the OpenAIAgent
+    const result = await processImageWithAgent(req.file.path, prompt);
+    
+    // Get the latest assistant message
+    const assistantMessages = result.messages.filter((msg: any) => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json({ 
+      analysis: latestMessage.content || "",
+      threadId: result.threadId,
+      agentId: result.agentId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Advanced Image Analysis Error:", error);
+    res.status(500).json({ 
+      error: "Failed to analyze image with advanced techniques",
       details: error.message 
     });
   }
