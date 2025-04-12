@@ -313,9 +313,9 @@ export async function processImageWithAgent(imageFilePath: string, prompt: strin
         };
       })
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in processImageWithAgent:", error);
-    throw new Error(`Failed to process image: ${error.message}`);
+    throw new Error(`Failed to process image: ${error.message || 'Unknown error'}`);
   }
 }
 
