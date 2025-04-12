@@ -1,16 +1,12 @@
 import OpenAI from "openai";
-import { OpenAIAgent } from "openai-agents";
 
 // Initialize standard OpenAI client for basic operations
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Initialize enhanced OpenAIAgent for advanced capabilities
-const openaiAgent = new OpenAIAgent({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: "gpt-4o", // Required parameter - using the latest model
-});
+// Note: We're removing the openai-agents import as it's causing errors
+// We'll use the standard OpenAI client for all operations
 
 // Create an enhanced Assistant for teachers in Assam
 export async function createTeacherAssistant() {
@@ -187,167 +183,140 @@ export async function uploadFile(filePath: string, purpose: "assistants" | "assi
   return file.id;
 }
 
-// Create a new teacher agent using the OpenAIAgent from openai-agents SDK
+// Create a new teacher agent - using standard OpenAI API as a fallback
 export async function createTeacherAgent() {
-  return openaiAgent.createAgent({
-    name: "Assam Teacher Career Guide",
-    description: "A specialized assistant for teachers in Assam providing personalized career guidance, job search, interview preparation, document creation, and regional insights.",
-    model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
-    instructions: `
-You are an AI Assistant for Aguwai Jauk - a specialized job portal for teachers in Assam, India.
+  // Instead of using openai-agents, we'll use the standard OpenAI Assistants API
+  return await createTeacherAssistant();
+}
 
-Your primary role is to provide personalized guidance to teachers looking for jobs in Assam. You offer:
-
-1. Job search assistance: Help users find relevant teaching positions based on their qualifications, location preferences, and career goals.
-2. Application advice: Provide guidance on preparing resumes, writing effective cover letters, and submitting strong applications.
-3. Interview preparation: Offer tips on common interview questions for teaching positions and strategies for demonstrating teaching skills.
-4. Career development: Suggest professional development opportunities, certifications, and skills that can enhance a teacher's prospects.
-5. Regional insights: Share information about educational institutions, living conditions, and cultural aspects of different regions in Assam.
-
-Always be respectful, culturally sensitive, and focus on providing accurate, practical information to help teachers advance their careers in Assam's education sector.
-    `,
-    tools: [
-      {
-        type: "search_retrieval",
-        provider: "bing", // The openai-agents library supports Bing for search
-      },
-      {
-        type: "vision", // The agent can analyze images
-      },
-      {
-        type: "audio", // The agent can process audio
-      },
-      {
-        type: "function", // Enable function calling
-        function: {
-          name: "search_job_listings",
-          description: "Search for teaching job listings based on criteria",
-          parameters: {
-            type: "object",
-            properties: {
-              location: {
-                type: "string",
-                description: "Location in Assam to search for jobs"
-              },
-              subject: {
-                type: "string",
-                description: "Academic subject like Mathematics, Science, etc."
-              }
-            },
-            required: []
+// Process a message with the standard OpenAI API
+export async function processAgentMessage(message: string) {
+  try {
+    // Create or get assistant
+    const assistant = await createTeacherAssistant();
+    
+    // Create a new thread for the conversation
+    const thread = await createThread();
+    
+    // Add the user message to the thread
+    await addMessageToThread(thread.id, message);
+    
+    // Run the assistant on the thread
+    const messages = await runAssistant(assistant.id, thread.id);
+    
+    // Get the latest assistant message
+    const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    // Format the response to match the expected structure
+    return {
+      threadId: thread.id,
+      agentId: assistant.id,
+      messages: messages.map((msg: any) => {
+        let content = "";
+        if (msg.content && msg.content.length > 0) {
+          const textContent = msg.content.find((c: any) => c.type === 'text');
+          if (textContent && 'text' in textContent) {
+            content = textContent.text.value;
           }
         }
-      }
-    ]
-  });
+        
+        return {
+          role: msg.role,
+          content: content
+        };
+      })
+    };
+  } catch (error: any) {
+    console.error("Error in processAgentMessage:", error);
+    throw new Error(`Failed to process message: ${error.message || 'Unknown error'}`);
+  }
 }
 
-// Process a message with the Agent API
-export async function processAgentMessage(message: string) {
-  // Create agent if not already done
-  const agent = await createTeacherAgent();
-  
-  // Create a new thread for the conversation
-  const thread = await openaiAgent.createThread();
-  
-  // Add the user message to the thread
-  await openaiAgent.addMessage(thread.id, {
-    role: "user",
-    content: message
-  });
-  
-  // Run the agent on the thread
-  const run = await openaiAgent.runThread({
-    threadId: thread.id,
-    agentId: agent.id
-  });
-  
-  // Get all messages from the thread
-  const messages = await openaiAgent.getMessages(thread.id);
-  
-  return {
-    threadId: thread.id,
-    agentId: agent.id,
-    messages
-  };
-}
-
-// Process audio with the Agent API
+// Process audio with the standard OpenAI API
 export async function processVoiceWithAgent(audioFilePath: string) {
-  const fs = require("fs");
-  
-  // Create agent if not already done
-  const agent = await createTeacherAgent();
-  
-  // Create a new thread for the conversation
-  const thread = await openaiAgent.createThread();
-  
-  // Upload the audio file
-  const file = await openaiAgent.uploadFile({
-    file: fs.createReadStream(audioFilePath),
-    purpose: "audio_understanding"
-  });
-  
-  // Add the audio file to the thread
-  await openaiAgent.addMessage(thread.id, {
-    role: "user",
-    content: null,
-    audio_file: file.id
-  });
-  
-  // Run the agent on the thread
-  const run = await openaiAgent.runThread({
-    threadId: thread.id,
-    agentId: agent.id
-  });
-  
-  // Get all messages from the thread
-  const messages = await openaiAgent.getMessages(thread.id);
-  
-  return {
-    threadId: thread.id,
-    agentId: agent.id,
-    messages
-  };
+  try {
+    // Create or get assistant
+    const assistant = await createTeacherAssistant();
+    
+    // Create a new thread for the conversation
+    const thread = await createThread();
+    
+    // Upload the audio file
+    const fileId = await uploadFile(audioFilePath, "assistants_input");
+    
+    // Add the audio to the thread
+    await addMessageToThread(thread.id, "", [fileId]);
+    
+    // Run the assistant on the thread
+    const messages = await runAssistant(assistant.id, thread.id);
+    
+    // Format the response to match the expected structure
+    return {
+      threadId: thread.id,
+      agentId: assistant.id,
+      messages: messages.map((msg: any) => {
+        let content = "";
+        if (msg.content && msg.content.length > 0) {
+          const textContent = msg.content.find((c: any) => c.type === 'text');
+          if (textContent && 'text' in textContent) {
+            content = textContent.text.value;
+          }
+        }
+        
+        return {
+          role: msg.role,
+          content: content
+        };
+      })
+    };
+  } catch (error: any) {
+    console.error("Error in processVoiceWithAgent:", error);
+    throw new Error(`Failed to process voice: ${error.message || 'Unknown error'}`);
+  }
 }
 
-// Process image with the Agent API
+// Process image with the standard OpenAI API
 export async function processImageWithAgent(imageFilePath: string, prompt: string) {
-  const fs = require("fs");
-  
-  // Create agent if not already done
-  const agent = await createTeacherAgent();
-  
-  // Create a new thread for the conversation
-  const thread = await openaiAgent.createThread();
-  
-  // Upload the image file
-  const file = await openaiAgent.uploadFile({
-    file: fs.createReadStream(imageFilePath),
-    purpose: "vision_understanding"
-  });
-  
-  // Add the image file to the thread with the prompt
-  await openaiAgent.addMessage(thread.id, {
-    role: "user",
-    content: prompt,
-    image_file: file.id
-  });
-  
-  // Run the agent on the thread
-  const run = await openaiAgent.runThread({
-    threadId: thread.id,
-    agentId: agent.id
-  });
-  
-  // Get all messages from the thread
-  const messages = await openaiAgent.getMessages(thread.id);
-  
-  return {
-    threadId: thread.id,
-    agentId: agent.id,
-    messages
-  };
+  try {
+    // Create or get assistant
+    const assistant = await createTeacherAssistant();
+    
+    // Create a new thread for the conversation
+    const thread = await createThread();
+    
+    // Upload the image file
+    const fileId = await uploadFile(imageFilePath, "assistants_input");
+    
+    // Add the image and prompt to the thread
+    await addMessageToThread(thread.id, prompt, [fileId]);
+    
+    // Run the assistant on the thread
+    const messages = await runAssistant(assistant.id, thread.id);
+    
+    // Format the response to match the expected structure
+    return {
+      threadId: thread.id,
+      agentId: assistant.id,
+      messages: messages.map((msg: any) => {
+        let content = "";
+        if (msg.content && msg.content.length > 0) {
+          const textContent = msg.content.find((c: any) => c.type === 'text');
+          if (textContent && 'text' in textContent) {
+            content = textContent.text.value;
+          }
+        }
+        
+        return {
+          role: msg.role,
+          content: content
+        };
+      })
+    };
+  } catch (error) {
+    console.error("Error in processImageWithAgent:", error);
+    throw new Error(`Failed to process image: ${error.message}`);
+  }
 }
 
 // Process a voice directly with the Assistants API (fallback method)
