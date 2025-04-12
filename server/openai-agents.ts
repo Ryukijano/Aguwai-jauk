@@ -8,92 +8,14 @@ const openai = new OpenAI({
 // Note: We're removing the openai-agents import as it's causing errors
 // We'll use the standard OpenAI client for all operations
 
-// Create an enhanced Assistant for teachers in Assam
+// Create a simple Assistant for teachers in Assam - no vision or audio capabilities
 export async function createTeacherAssistant() {
-  // Create an assistant with the OpenAI Assistants API
+  // Create an assistant with the OpenAI Assistants API - minimal version
   const assistant = await openai.beta.assistants.create({
     name: "Assam Teacher Career Guide",
-    description: "A specialized assistant for teachers in Assam providing personalized career guidance, job search, interview preparation, document creation, and regional insights.",
+    description: "A specialized assistant for teachers in Assam providing personalized career guidance and job search help.",
     model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-    tools: [
-      { type: "code_interpreter" },
-      // { type: "retrieval" },  // This type is causing errors, let's comment it out
-      { 
-        type: "function",
-        function: {
-          name: "search_job_listings",
-          description: "Search for teaching job listings based on criteria",
-          parameters: {
-            type: "object",
-            properties: {
-              location: {
-                type: "string",
-                description: "Location in Assam to search for jobs"
-              },
-              subject: {
-                type: "string",
-                description: "Academic subject like Mathematics, Science, etc."
-              },
-              jobType: {
-                type: "string",
-                description: "Full-time, part-time, contract, etc."
-              },
-              schoolType: {
-                type: "string",
-                description: "Government, private, NGO, etc."
-              }
-            },
-            required: []
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
-          name: "analyze_resume",
-          description: "Analyze a teacher's resume and provide feedback",
-          parameters: {
-            type: "object",
-            properties: {
-              resumeText: {
-                type: "string",
-                description: "The full text content of the resume"
-              },
-              jobTitle: {
-                type: "string",
-                description: "The job title the user is applying for"
-              }
-            },
-            required: ["resumeText"]
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
-          name: "generate_interview_questions",
-          description: "Generate teaching interview questions based on position",
-          parameters: {
-            type: "object",
-            properties: {
-              position: {
-                type: "string",
-                description: "The teaching position (e.g., 'math teacher', 'principal')"
-              },
-              schoolType: {
-                type: "string",
-                description: "Type of school (government, private, etc.)"
-              },
-              experienceLevel: {
-                type: "string",
-                description: "Level of experience (entry, mid, senior)"
-              }
-            },
-            required: ["position"]
-          }
-        }
-      }
-    ],
+    tools: [], // Removing all tools to simplify and avoid errors
     instructions: `
 You are an AI Assistant for Aguwai Jauk - a specialized job portal for teachers in Assam, India.
 
@@ -107,13 +29,7 @@ Your primary role is to provide personalized guidance to teachers looking for jo
 
 Always be respectful, culturally sensitive, and focus on providing accurate, practical information to help teachers advance their careers in Assam's education sector.
 
-You have access to several tools:
-- Web searching for finding current job postings and information about schools
-- Document analysis for reviewing resumes and cover letters
-- Image analysis for reviewing teaching certificates and credentials
-- Voice interaction to help users practice interview responses
-
-Be proactive in suggesting relevant tools based on the user's needs.
+Keep your responses conversational but concise, and try to organize information clearly to make it easily digestible for users.
     `
   });
 

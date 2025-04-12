@@ -80,24 +80,35 @@ router.post("/chat", async (req, res) => {
   try {
     const { message } = req.body;
     const sessionId = req.session.id || 'anonymous';
+    console.log("Received chat message:", message, "Session ID:", sessionId);
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
 
     // Get assistant and thread
+    console.log("Getting assistant...");
     const assistantId = await getAssistant();
+    console.log("Assistant ID:", assistantId);
+
+    console.log("Getting thread for session...");
     const threadId = await getThreadForSession(sessionId);
+    console.log("Thread ID:", threadId);
 
     // Add message to thread
-    await addMessageToThread(threadId, message);
+    console.log("Adding message to thread...");
+    const addedMessage = await addMessageToThread(threadId, message);
+    console.log("Message added:", addedMessage.id);
 
     // Run the assistant on the thread
+    console.log("Running assistant on thread...");
     const messages = await runAssistant(assistantId, threadId);
+    console.log("Assistant run completed with", messages.length, "messages");
     
     // Get the latest assistant message
     const assistantMessages = messages.filter((msg: any) => msg.role === 'assistant');
     const latestMessage = assistantMessages[assistantMessages.length - 1];
+    console.log("Latest message found:", latestMessage ? latestMessage.id : "None");
     
     let content = "";
     if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
@@ -105,7 +116,12 @@ router.post("/chat", async (req, res) => {
       const textContent = latestMessage.content.find((c: any) => c.type === 'text');
       if (textContent && 'text' in textContent) {
         content = textContent.text.value;
+        console.log("Extracted text content:", content.substring(0, 50) + (content.length > 50 ? "..." : ""));
+      } else {
+        console.log("No text content found in message:", latestMessage.content);
       }
+    } else {
+      console.log("No valid message content found");
     }
 
     // Store the messages in the database if a user is authenticated
@@ -123,6 +139,7 @@ router.post("/chat", async (req, res) => {
       });
     }
 
+    console.log("Sending response...");
     res.json({ 
       message: content,
       timestamp: new Date().toISOString()
@@ -130,6 +147,7 @@ router.post("/chat", async (req, res) => {
   } catch (err) {
     const error = err as Error;
     console.error("AI Chat Error:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({ 
       error: "Failed to process chat message",
       details: error.message 
