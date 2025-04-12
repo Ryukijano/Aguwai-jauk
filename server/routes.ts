@@ -36,6 +36,7 @@ import {
   getJobTrackingData
 } from "./googleApi";
 import aiRoutes from "./routes/ai";
+import langchainSimpleRoutes from "./routes/langchain-simple";
 
 
 // Promisify scrypt
@@ -84,6 +85,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register the AI routes
   apiRouter.use("/ai", aiRoutes);
+  
+  // Register the LangChain routes
+  apiRouter.use("/ai", langchainSimpleRoutes);
 
   // Enable sessions
   const MemoryStore = memorystore(session);
