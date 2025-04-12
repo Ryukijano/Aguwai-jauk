@@ -6,7 +6,7 @@ import JobListingsSection from "@/components/dashboard/JobListingsSection";
 import AIInsights from "@/components/dashboard/AIInsights";
 import ProfileBio from "@/components/dashboard/ProfileBio";
 import CalendarWidget from "@/components/dashboard/CalendarWidget";
-import AIChatWidget from "@/components/dashboard/AIChatWidget";
+import EnhancedAIChatWidget from "@/components/dashboard/EnhancedAIChatWidget";
 import { Briefcase, FileText, CalendarCheck, Bell } from "lucide-react";
 import { Stat, User, JobListing, Application, Event } from "@/lib/types";
 
@@ -145,7 +145,7 @@ const Dashboard = () => {
         <div className="space-y-6">
           <ProfileBio />
           <CalendarWidget />
-          <AIChatWidget />
+          <EnhancedAIChatWidget />
         </div>
       </div>
     </MainLayout>

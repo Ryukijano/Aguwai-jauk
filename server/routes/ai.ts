@@ -1,73 +1,122 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { ConversationChain } from "langchain/chains";
-import { BufferMemory } from "langchain/memory";
 import express from "express";
-import type { ChatMessage } from "@shared/schema";
+import multer from "multer";
 import { storage } from "../storage";
+import fs from "fs";
+import path from "path";
+import { 
+  createTeacherAssistant, 
+  createThread, 
+  addMessageToThread, 
+  runAssistant, 
+  getThreadMessages,
+  uploadFile,
+  processVoiceWithAssistant,
+  processImageWithAssistant
+} from "../openai-agents";
 
 const router = express.Router();
 
-// Initialize ChatOpenAI with API key from environment
-const chatModel = new ChatOpenAI({
-  modelName: "gpt-3.5-turbo",
-  temperature: 0.7,
+// Set up multer for file uploads (voice and image)
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(__dirname, '../../uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
 });
 
-// Define the system prompt
-const systemPrompt = 
-  "You are an AI Assistant for the Aguwai Jauk - a specialized job portal for teachers in Assam, India.\n\n" +
-  "Your primary role is to provide personalized guidance to teachers looking for jobs in Assam. You offer:\n\n" +
-  "1. Job search assistance: Help users find relevant teaching positions based on their qualifications, location preferences, and career goals.\n" +
-  "2. Application advice: Provide guidance on preparing resumes, writing effective cover letters, and submitting strong applications.\n" +
-  "3. Interview preparation: Offer tips on common interview questions for teaching positions and strategies for demonstrating teaching skills.\n" +
-  "4. Career development: Suggest professional development opportunities, certifications, and skills that can enhance a teacher's prospects.\n" +
-  "5. Regional insights: Share information about educational institutions, living conditions, and cultural aspects of different regions in Assam.\n\n" +
-  "Always be respectful, culturally sensitive, and focus on providing accurate, practical information to help teachers advance their careers in Assam's education sector.";
+// Initialize assistant ID (will be set after creation)
+let ASSISTANT_ID: string | null = null;
 
-// Create a conversation chain with memory
-const memory = new BufferMemory();
-const chain = new ConversationChain({
-  llm: chatModel,
-  memory: memory,
-  prompt: {
-    template: systemPrompt + "\n\nCurrent conversation:\n{history}\nHuman: {input}\nAI: ",
-    inputVariables: ["history", "input"],
-  },
-});
+// Initialize and get the assistant
+const getAssistant = async () => {
+  if (!ASSISTANT_ID) {
+    try {
+      const assistant = await createTeacherAssistant();
+      ASSISTANT_ID = assistant.id;
+      console.log(`Created new assistant with ID: ${ASSISTANT_ID}`);
+    } catch (error) {
+      console.error("Failed to create assistant:", error);
+      throw error;
+    }
+  }
+  return ASSISTANT_ID;
+};
 
-// Chat endpoint
+// Store threads by session ID
+const threadsBySession: Record<string, string> = {};
+
+// Get or create thread for a session
+const getThreadForSession = async (sessionId: string) => {
+  if (!threadsBySession[sessionId]) {
+    const thread = await createThread();
+    threadsBySession[sessionId] = thread.id;
+    console.log(`Created new thread for session ${sessionId}: ${thread.id}`);
+  }
+  return threadsBySession[sessionId];
+};
+
+// Text chat endpoint
 router.post("/chat", async (req, res) => {
   try {
     const { message } = req.body;
+    const sessionId = req.session.id || 'anonymous';
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // Call the chain
-    const response = await chain.call({
-      input: message,
-    });
+    // Get assistant and thread
+    const assistantId = await getAssistant();
+    const threadId = await getThreadForSession(sessionId);
 
-    // Store the message in the database if a user is authenticated
+    // Add message to thread
+    await addMessageToThread(threadId, message);
+
+    // Run the assistant on the thread
+    const messages = await runAssistant(assistantId, threadId);
+    
+    // Get the latest assistant message
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    let content = "";
+    if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
+      // Handle text content
+      const textContent = latestMessage.content.find(c => c.type === 'text');
+      if (textContent && 'text' in textContent) {
+        content = textContent.text.value;
+      }
+    }
+
+    // Store the messages in the database if a user is authenticated
     if (req.session?.userId) {
       await storage.createChatMessage({
         userId: req.session.userId,
         content: message,
         isFromUser: true,
-        timestamp: new Date().toISOString(),
       });
 
       await storage.createChatMessage({
         userId: req.session.userId,
-        content: response.response,
+        content: content,
         isFromUser: false,
-        timestamp: new Date().toISOString(),
       });
     }
 
     res.json({ 
-      message: response.response,
+      message: content,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -75,6 +124,180 @@ router.post("/chat", async (req, res) => {
     console.error("AI Chat Error:", error);
     res.status(500).json({ 
       error: "Failed to process chat message",
+      details: error.message 
+    });
+  }
+});
+
+// Voice chat endpoint
+router.post("/voice", upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Audio file is required" });
+    }
+
+    const sessionId = req.session.id || 'anonymous';
+    
+    // Get assistant and thread
+    const assistantId = await getAssistant();
+    const threadId = await getThreadForSession(sessionId);
+    
+    // Upload the audio file
+    const fileId = await uploadFile(req.file.path, "assistants_input");
+    
+    // Add message with audio to thread
+    await addMessageToThread(threadId, "", [fileId]);
+    
+    // Run the assistant
+    const messages = await runAssistant(assistantId, threadId);
+    
+    // Get the latest assistant message
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    let content = "";
+    if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
+      // Handle text content
+      const textContent = latestMessage.content.find(c => c.type === 'text');
+      if (textContent && 'text' in textContent) {
+        content = textContent.text.value;
+      }
+    }
+    
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json({ 
+      message: content,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Voice Chat Error:", error);
+    res.status(500).json({ 
+      error: "Failed to process voice message",
+      details: error.message 
+    });
+  }
+});
+
+// Image analysis endpoint
+router.post("/analyze-image", upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Image file is required" });
+    }
+
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Analysis prompt is required" });
+    }
+
+    const sessionId = req.session.id || 'anonymous';
+    
+    // Get assistant and thread
+    const assistantId = await getAssistant();
+    const threadId = await getThreadForSession(sessionId);
+    
+    // Upload the image file
+    const fileId = await uploadFile(req.file.path, "assistants_input");
+    
+    // Add message with image to thread
+    await addMessageToThread(threadId, prompt, [fileId]);
+    
+    // Run the assistant
+    const messages = await runAssistant(assistantId, threadId);
+    
+    // Get the latest assistant message
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    let content = "";
+    if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
+      // Handle text content
+      const textContent = latestMessage.content.find(c => c.type === 'text');
+      if (textContent && 'text' in textContent) {
+        content = textContent.text.value;
+      }
+    }
+    
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json({ 
+      analysis: content,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Image Analysis Error:", error);
+    res.status(500).json({ 
+      error: "Failed to analyze image",
+      details: error.message 
+    });
+  }
+});
+
+// Document analysis endpoint (resume, cover letter)
+router.post("/analyze-document", upload.single('document'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Document file is required" });
+    }
+
+    const { documentType } = req.body; // 'resume' or 'coverLetter'
+    if (!documentType) {
+      return res.status(400).json({ error: "Document type is required" });
+    }
+
+    const sessionId = req.session.id || 'anonymous';
+    
+    // Get assistant and thread
+    const assistantId = await getAssistant();
+    const threadId = await getThreadForSession(sessionId);
+    
+    // Upload the document file
+    const fileId = await uploadFile(req.file.path, "assistants_input");
+    
+    // Create an appropriate prompt based on document type
+    let prompt = "";
+    if (documentType === 'resume') {
+      prompt = "Please analyze this resume for a teaching position. Provide feedback on its strengths, weaknesses, and suggestions for improvement.";
+    } else if (documentType === 'coverLetter') {
+      prompt = "Please analyze this cover letter for a teaching position. Provide feedback on its effectiveness, structure, and suggestions for improvement.";
+    }
+    
+    // Add message with document to thread
+    await addMessageToThread(threadId, prompt, [fileId]);
+    
+    // Run the assistant
+    const messages = await runAssistant(assistantId, threadId);
+    
+    // Get the latest assistant message
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant');
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    let content = "";
+    if (latestMessage && latestMessage.content && latestMessage.content.length > 0) {
+      // Handle text content
+      const textContent = latestMessage.content.find(c => c.type === 'text');
+      if (textContent && 'text' in textContent) {
+        content = textContent.text.value;
+      }
+    }
+    
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json({ 
+      analysis: content,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Document Analysis Error:", error);
+    res.status(500).json({ 
+      error: "Failed to analyze document",
       details: error.message 
     });
   }
@@ -89,16 +312,35 @@ router.get("/chat-history", async (req, res) => {
       return res.json(messages);
     }
     
-    // Otherwise get from memory
-    const history = await memory.chatHistory.getMessages();
-    const formattedHistory = history.map((msg, index) => ({
-      id: index + 1,
-      content: msg.content as string,
-      isFromUser: msg._getType() === "human",
-      timestamp: new Date().toISOString()
-    }));
-
-    res.json(formattedHistory);
+    // Otherwise try to get from thread
+    const sessionId = req.session.id || 'anonymous';
+    if (threadsBySession[sessionId]) {
+      const threadId = threadsBySession[sessionId];
+      const messages = await getThreadMessages(threadId);
+      
+      // Convert to our format
+      const formattedMessages = messages.map((msg, index) => {
+        let content = "";
+        if (msg.content && msg.content.length > 0) {
+          const textContent = msg.content.find(c => c.type === 'text');
+          if (textContent && 'text' in textContent) {
+            content = textContent.text.value;
+          }
+        }
+        
+        return {
+          id: index + 1,
+          content: content,
+          isFromUser: msg.role === 'user',
+          timestamp: new Date(msg.created_at * 1000).toISOString()
+        };
+      });
+      
+      return res.json(formattedMessages);
+    }
+    
+    // No history found
+    return res.json([]);
   } catch (err) {
     const error = err as Error;
     console.error("Chat History Error:", error);
@@ -112,7 +354,11 @@ router.get("/chat-history", async (req, res) => {
 // Clear chat history
 router.delete("/chat-history", async (req, res) => {
   try {
-    await memory.clear();
+    const sessionId = req.session.id || 'anonymous';
+    
+    // Create a new thread to effectively clear history
+    const thread = await createThread();
+    threadsBySession[sessionId] = thread.id;
     
     // If user is authenticated, clear from database too
     if (req.session?.userId) {
