@@ -27,10 +27,7 @@ const AIChatWidget = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
       setMessage("");
-      toast({
-        title: "Message sent",
-        description: "Your message has been processed by the AI assistant.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({

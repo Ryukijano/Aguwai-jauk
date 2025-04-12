@@ -67,10 +67,7 @@ const EnhancedAIChatWidget = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
       setMessage("");
-      toast({
-        title: "Message sent",
-        description: "Your message has been processed by the AI assistant.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({
@@ -120,10 +117,7 @@ const EnhancedAIChatWidget = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
-      toast({
-        title: "Voice message processed",
-        description: "Your voice message has been processed by the AI assistant.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({
@@ -178,10 +172,7 @@ const EnhancedAIChatWidget = () => {
       setSelectedImage(null);
       setImagePrompt("");
       setOpenFileDialog(false);
-      toast({
-        title: "Image analyzed",
-        description: "The image has been analyzed by the AI assistant.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({
@@ -214,10 +205,7 @@ const EnhancedAIChatWidget = () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
       setSelectedDocument(null);
       setOpenFileDialog(false);
-      toast({
-        title: "Document analyzed",
-        description: "Your document has been analyzed by the AI assistant.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({
@@ -234,10 +222,7 @@ const EnhancedAIChatWidget = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai/chat-history"] });
-      toast({
-        title: "Chat cleared",
-        description: "Your chat history has been cleared.",
-      });
+      // No toast notification for seamless experience
     },
     onError: (error) => {
       toast({
