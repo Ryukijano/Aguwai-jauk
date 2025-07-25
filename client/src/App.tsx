@@ -2,7 +2,7 @@ import { Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from "./lib/auth-provider";
+import ReactReadyWrapper from "@/components/ReactReadyWrapper";
 
 // Pages
 import Dashboard from "@/pages/Dashboard";
@@ -43,11 +43,11 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <ReactReadyWrapper>
         <Router />
         <AIChatPopup />
         <Toaster />
-      </AuthProvider>
+      </ReactReadyWrapper>
     </QueryClientProvider>
   );
 }
