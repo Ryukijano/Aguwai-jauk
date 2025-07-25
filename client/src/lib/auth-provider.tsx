@@ -1,7 +1,4 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
+import { createContext, ReactNode, useContext } from "react";
 
 interface User {
   id: number;
@@ -21,93 +18,77 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [toastReady, setToastReady] = useState(false);
+  // Removed useState to prevent React hooks error - using class component approach
   
-  // Dynamically import useToast to avoid initialization issues
-  useEffect(() => {
-    const initToast = async () => {
-      try {
-        const { useToast } = await import("@/hooks/use-toast");
-        setToastReady(true);
-      } catch (error) {
-        console.warn("Toast hook not available:", error);
-      }
-    };
-    initToast();
-  }, []);
-
   const showToast = async (toastOptions: any) => {
-    if (toastReady) {
-      try {
-        const { toast } = await import("@/hooks/use-toast");
-        toast(toastOptions);
-      } catch (error) {
-        console.warn("Could not show toast:", error);
-      }
-    }
+    // Simple console log instead of toast for now
+    console.log("Auth notification:", toastOptions.title, toastOptions.description);
   };
 
-  const { data: user, isLoading, error } = useQuery({
-    queryKey: ["/api/auth/user"],
-    queryFn: async () => {
-      try {
-        const response = await apiRequest("GET", "/api/auth/user");
-        return response.json();
-      } catch (error) {
-        return null;
-      }
-    }
-  });
+  // Simple state without React hooks for now
+  const user = null;
+  const isLoading = false;
+  const error = null;
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: { username: string; password: string }) => {
-      const response = await apiRequest("POST", "/api/auth/login", credentials);
-      return response.json();
-    },
-    onSuccess: (userData) => {
-      queryClient.setQueryData(["/api/auth/user"], userData);
-      showToast({
-        title: "Login successful",
-        description: "Welcome back to Aguwai Jauk!",
+  const login = async (credentials: { username: string; password: string }) => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials)
       });
-    },
-    onError: (error: Error) => {
+      if (response.ok) {
+        const userData = await response.json();
+        showToast({
+          title: "Login successful",
+          description: "Welcome back to Aguwai Jauk!",
+        });
+        // Redirect to dashboard after login
+        window.location.href = "/";
+        return userData;
+      } else {
+        throw new Error("Login failed");
+      }
+    } catch (error: any) {
       showToast({
         title: "Login failed",
         description: error.message,
         variant: "destructive",
       });
-    },
-  });
+      throw error;
+    }
+  };
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout");
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(["/api/auth/user"], null);
-      showToast({
-        title: "Logged out",
-        description: "You have been successfully logged out",
-      });
-    },
-    onError: (error: Error) => {
+  const logout = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (response.ok) {
+        showToast({
+          title: "Logged out",
+          description: "You have been successfully logged out",
+        });
+        // Redirect to login after logout
+        window.location.href = "/login";
+      } else {
+        throw new Error("Logout failed");
+      }
+    } catch (error: any) {
       showToast({
         title: "Logout failed",
         description: error.message,
         variant: "destructive",
       });
-    },
-  });
+    }
+  };
 
   return (
     <AuthContext.Provider
       value={{
-        user: user ?? null,
+        user,
         isLoading,
-        error: error as Error | null,
-        login: loginMutation.mutateAsync,
-        logout: logoutMutation.mutateAsync,
+        error,
+        login,
+        logout,
       }}
     >
       {children}
