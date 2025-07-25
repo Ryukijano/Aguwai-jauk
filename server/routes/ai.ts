@@ -21,6 +21,7 @@ import {
   processVoiceWithAgent,
   processImageWithAgent
 } from "../openai-agents";
+import { processAgentChat } from "../ai-agent";
 
 const router = express.Router();
 
@@ -520,6 +521,54 @@ router.post("/advanced-image", upload.single('image'), async (req, res) => {
     console.error("Advanced Image Analysis Error:", error);
     res.status(500).json({ 
       error: "Failed to analyze image with advanced techniques",
+      details: error.message 
+    });
+  }
+});
+
+// New AI Agent Chat endpoint with Gemini & OpenAI capabilities
+router.post("/agent-chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+    const sessionId = req.session.id || 'anonymous';
+    const userId = req.session?.userId;
+
+    console.log("Agent chat received:", message, "User ID:", userId);
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Process the message using the advanced AI agent
+    const result = await processAgentChat(message, userId);
+
+    // Store the messages in the database if a user is authenticated
+    if (userId) {
+      await storage.createChatMessage({
+        userId: userId,
+        content: message,
+        isFromUser: true,
+      });
+
+      await storage.createChatMessage({
+        userId: userId,
+        content: result.message,
+        isFromUser: false,
+      });
+    }
+
+    console.log("Agent response:", result.message.substring(0, 100) + "...");
+    
+    res.json({ 
+      message: result.message,
+      toolsUsed: result.toolsUsed,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Agent Chat Error:", error);
+    res.status(500).json({ 
+      error: "Failed to process agent chat message",
       details: error.message 
     });
   }

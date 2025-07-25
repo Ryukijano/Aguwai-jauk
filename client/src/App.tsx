@@ -17,6 +17,9 @@ import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import NotFound from "@/pages/not-found";
 
+// Components
+import AIChatPopup from "@/components/ai/AIChatPopup";
+
 function Router() {
   return (
     <Switch>
@@ -42,6 +45,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router />
+        <AIChatPopup />
         <Toaster />
       </AuthProvider>
     </QueryClientProvider>
