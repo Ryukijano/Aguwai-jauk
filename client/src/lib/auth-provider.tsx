@@ -1,6 +1,5 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
@@ -22,7 +21,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { toast } = useToast();
+  const [toastReady, setToastReady] = useState(false);
+  
+  // Dynamically import useToast to avoid initialization issues
+  useEffect(() => {
+    const initToast = async () => {
+      try {
+        const { useToast } = await import("@/hooks/use-toast");
+        setToastReady(true);
+      } catch (error) {
+        console.warn("Toast hook not available:", error);
+      }
+    };
+    initToast();
+  }, []);
+
+  const showToast = async (toastOptions: any) => {
+    if (toastReady) {
+      try {
+        const { toast } = await import("@/hooks/use-toast");
+        toast(toastOptions);
+      } catch (error) {
+        console.warn("Could not show toast:", error);
+      }
+    }
+  };
 
   const { data: user, isLoading, error } = useQuery({
     queryKey: ["/api/auth/user"],
@@ -43,13 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (userData) => {
       queryClient.setQueryData(["/api/auth/user"], userData);
-      toast({
+      showToast({
         title: "Login successful",
         description: "Welcome back to Aguwai Jauk!",
       });
     },
     onError: (error: Error) => {
-      toast({
+      showToast({
         title: "Login failed",
         description: error.message,
         variant: "destructive",
@@ -63,13 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/user"], null);
-      toast({
+      showToast({
         title: "Logged out",
         description: "You have been successfully logged out",
       });
     },
     onError: (error: Error) => {
-      toast({
+      showToast({
         title: "Logout failed",
         description: error.message,
         variant: "destructive",
