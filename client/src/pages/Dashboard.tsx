@@ -108,7 +108,7 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="mt-4 md:mt-0">
-            <button className="bg-white text-primary-600 hover:bg-primary-50 font-medium px-4 py-2 rounded-lg flex items-center transition">
+            <button className="bg-white text-primary-600 hover:bg-primary-50 font-medium px-6 py-3 md:px-4 md:py-2 rounded-lg flex items-center transition min-h-[48px] min-w-[48px]">
               <svg 
                 xmlns="http://www.w3.org/2000/svg" 
                 className="h-5 w-5 mr-2" 

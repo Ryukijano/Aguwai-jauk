@@ -99,8 +99,8 @@ const JobCard = ({ job }: JobCardProps) => {
   };
 
   return (
-    <div className="p-6 border-b border-gray-100 hover:bg-gray-50 transition group">
-      <div className="flex items-start justify-between">
+    <div className="p-4 md:p-6 border-b border-gray-100 hover:bg-gray-50 transition">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between">
         <div className="flex items-start space-x-4">
           <div className={`p-3 rounded-lg ${getJobIconColor()}`}>
             {getJobIcon()}
@@ -144,20 +144,18 @@ const JobCard = ({ job }: JobCardProps) => {
             </div>
           </div>
         </div>
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-col md:flex-row gap-2 mt-4 md:mt-0">
           <Button 
             variant="default" 
-            size="sm"
-            className="invisible group-hover:visible"
+            className="bg-primary-500 hover:bg-primary-600 text-white min-h-[48px] px-6 w-full md:w-auto"
             onClick={handleApply}
             disabled={isLoading}
           >
-            Apply Now
+            {isLoading ? "Applying..." : "Apply Now"}
           </Button>
           <Button 
-            variant="ghost" 
-            size="sm"
-            className="invisible group-hover:visible"
+            variant="outline" 
+            className="text-primary-500 hover:text-primary-600 min-h-[48px] px-6 w-full md:w-auto"
             onClick={viewJobDetails}
           >
             View Details

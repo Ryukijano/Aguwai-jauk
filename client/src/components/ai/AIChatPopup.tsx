@@ -72,7 +72,7 @@ const AIChatPopup = () => {
 
   return (
     <>
-      {/* Toggle Button */}
+      {/* Toggle Button - Mobile Optimized (48x48 minimum touch target) */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -80,20 +80,20 @@ const AIChatPopup = () => {
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-50 bg-primary-500 hover:bg-primary-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-200 group"
+            className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 bg-primary-500 hover:bg-primary-600 text-white rounded-full w-14 h-14 md:w-16 md:h-16 shadow-lg hover:shadow-xl transition-all duration-200 group flex items-center justify-center"
           >
             <div className="relative">
-              <MessageSquare size={24} />
+              <MessageSquare size={24} className="md:w-6 md:h-6" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
             </div>
-            <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <span className="hidden md:block absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               AI Assistant
             </span>
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Chat Popup */}
+      {/* Chat Popup - Mobile Responsive */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -101,9 +101,11 @@ const AIChatPopup = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`fixed bottom-6 right-6 z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 ${
-              isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'
-            } transition-all duration-300`}
+            className={`fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 ${
+              isMinimized 
+                ? 'w-72 h-16 bottom-4 right-4 md:w-80 md:bottom-6 md:right-6' 
+                : 'bottom-0 right-0 left-0 h-[80vh] md:bottom-6 md:right-6 md:left-auto md:w-96 md:h-[600px] md:rounded-2xl rounded-t-2xl'
+            }`}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-primary-50 to-primary-100 rounded-t-2xl">
