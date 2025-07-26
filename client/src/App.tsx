@@ -1,4 +1,6 @@
-import AppSafe from "./App-Safe";
+// Simple App component that directly renders the dashboard
+import DashboardSafe from '@/pages/DashboardSafe';
 
-// Re-export App-Safe as the default App
-export default AppSafe;
+export default function App() {
+  return <DashboardSafe />;
+}
