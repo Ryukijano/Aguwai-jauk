@@ -1,11 +1,9 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-
-// Direct imports - no lazy loading to avoid HMR issues
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import DashboardSafe from '@/pages/DashboardSafe';
+import './index.css';
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -16,7 +14,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Create QueryClient
+// Create QueryClient outside of component to avoid re-creation
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -27,21 +25,12 @@ const queryClient = new QueryClient({
   },
 });
 
-// Main App Component
-function App() {
-  return (
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <DashboardSafe />
-        <Toaster />
-      </QueryClientProvider>
-    </React.StrictMode>
-  );
-}
-
-// Mount the app
-const container = document.getElementById('root');
-if (container) {
-  const root = ReactDOM.createRoot(container);
-  root.render(<App />);
-}
+// Direct render without extra component wrapper
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <DashboardSafe />
+      <Toaster />
+    </QueryClientProvider>
+  </StrictMode>
+);
