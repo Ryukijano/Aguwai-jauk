@@ -1,4 +1,4 @@
-// This file is deprecated - use App-Safe.tsx instead
-export default function App() {
-  return null;
-}
+import AppSafe from "./App-Safe";
+
+// Re-export App-Safe as the default App
+export default AppSafe;
