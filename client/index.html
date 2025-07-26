@@ -13,45 +13,13 @@
   <meta name="apple-mobile-web-app-title" content="Aguwai Jauk">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <!-- Load preload script as first thing -->
+  <script src="/preload.js"></script>
 </head>
 <body>
   <div id="root"></div>
-  <script>
-    // Comprehensive RefreshRuntime fix
-    (function() {
-      // Override console.error to suppress RefreshRuntime errors
-      const originalError = console.error;
-      console.error = function(...args) {
-        const message = args[0];
-        if (typeof message === 'string' && message.includes('RefreshRuntime.register')) {
-          return; // Suppress this specific error
-        }
-        originalError.apply(console, args);
-      };
-      
-      // Set up RefreshRuntime before anything else
-      if (!window.RefreshRuntime) {
-        window.RefreshRuntime = {
-          register: function() { return arguments[1]; },
-          createSignatureFunctionForTransform: function() { 
-            return function() { return arguments[0]; }; 
-          },
-          injectIntoGlobalHook: function() {},
-          performReactRefresh: function() {},
-          isLikelyComponentType: function() { return false; }
-        };
-      }
-      
-      // Override register method specifically
-      if (window.RefreshRuntime && !window.RefreshRuntime.register) {
-        window.RefreshRuntime.register = function() { return arguments[1]; };
-      }
-      
-      window.$RefreshReg$ = function() {};
-      window.$RefreshSig$ = function() { return function(type) { return type; }; };
-      window.__vite_plugin_react_preamble_installed__ = true;
-    })();
-  </script>
+
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
