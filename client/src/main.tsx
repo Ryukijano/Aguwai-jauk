@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
@@ -11,4 +12,24 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+// Ensure DOM is ready before rendering
+const renderApp = () => {
+  const rootElement = document.getElementById("root");
+  if (!rootElement) {
+    console.error("Root element not found");
+    return;
+  }
+  
+  createRoot(rootElement).render(
+    <StrictMode>
+      <App />
+    </StrictMode>
+  );
+};
+
+// Wait for DOM content to be loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', renderApp);
+} else {
+  renderApp();
+}

@@ -30,10 +30,10 @@ class ReactReadyWrapper extends Component<Props, State> {
   componentDidMount() {
     // Test if React hooks are available
     try {
-      // Simple check to see if React context is ready
+      // Longer delay to ensure React is fully initialized
       setTimeout(() => {
         this.setState({ isReady: true });
-      }, 100);
+      }, 500);
     } catch (error) {
       console.warn('React hooks not ready:', error);
       this.setState({ hasError: true });
