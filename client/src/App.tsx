@@ -1,12 +1,10 @@
 import { Switch, Route } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "./lib/auth-provider";
-import ReactReadyWrapper from "@/components/ReactReadyWrapper";
+import { SafeQueryWrapper } from "@/components/SafeQueryWrapper";
 
 // Pages
-import Dashboard from "@/pages/Dashboard";
+import DashboardSafe from "@/pages/DashboardSafe";
 import JobListings from "@/pages/JobListings";
 import Applications from "@/pages/Applications";
 import AIAssistant from "@/pages/AIAssistant";
@@ -25,7 +23,7 @@ function Router() {
   return (
     <Switch>
       {/* Temporarily render Dashboard directly */}
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={DashboardSafe} />
 
       <Route path="/jobs" component={JobListings} />
       <Route path="/applications" component={Applications} />
@@ -43,15 +41,13 @@ function Router() {
 
 function App() {
   return (
-    <ReactReadyWrapper>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <Router />
-          <AIChatPopup />
-          <Toaster />
-        </AuthProvider>
-      </QueryClientProvider>
-    </ReactReadyWrapper>
+    <SafeQueryWrapper>
+      <AuthProvider>
+        <Router />
+        <AIChatPopup />
+        <Toaster />
+      </AuthProvider>
+    </SafeQueryWrapper>
   );
 }
 
