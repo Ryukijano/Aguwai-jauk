@@ -1,6 +1,5 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import AppSafe from "./App-Safe";
 import "./index.css";
 
 // Register Service Worker for PWA
@@ -12,24 +11,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Ensure DOM is ready before rendering
-const renderApp = () => {
-  const rootElement = document.getElementById("root");
-  if (!rootElement) {
-    console.error("Root element not found");
-    return;
-  }
-  
-  createRoot(rootElement).render(
-    <StrictMode>
-      <App />
-    </StrictMode>
-  );
-};
-
-// Wait for DOM content to be loaded
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', renderApp);
-} else {
-  renderApp();
+// Simple render without extra wrappers
+const root = document.getElementById("root");
+if (root) {
+  createRoot(root).render(<AppSafe />);
 }
