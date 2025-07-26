@@ -1,0 +1,15 @@
+# Production configuration for Replit deployments
+modules = ["nodejs-20", "bash", "web"]
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[deployment]
+deploymentTarget = "cloudrun"
+# Use production build and start commands
+run = ["sh", "-c", "npm run build && npm run start"]
+
+[env]
+NODE_ENV = "production"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

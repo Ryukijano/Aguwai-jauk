@@ -73,6 +73,28 @@ An AI-powered job portal specifically designed for teachers in Assam, featuring 
 1. **Dashboard**: Overview of job listings, applications, and AI insights
 2. **Job Listings**: Browse and filter teaching positions
 3. **Application Tracking**: Monitor application status
+
+## Deployment Configuration (Updated July 26, 2025)
+The project is configured for production deployment with the following setup:
+
+### Production Scripts
+- **Build**: `npm run build` - Builds frontend with Vite and bundles backend with esbuild
+- **Start**: `npm run start` - Runs the production server with NODE_ENV=production
+- **Deploy Script**: `deploy.sh` - Automated deployment script with error handling
+
+### Deployment Files
+1. **replit.toml**: Production configuration for Replit deployments
+   - Uses production build and start commands
+   - Sets NODE_ENV to production
+   - Configures proper port mapping (5000 → 80)
+
+2. **deploy.sh**: Production deployment script
+   - Builds the application
+   - Handles build errors gracefully
+   - Starts the production server
+
+### Important Note
+The default `.replit` file uses development commands which are blocked in production deployments. For deployment, Replit should use the `replit.toml` configuration or the `deploy.sh` script instead.
 4. **AI Assistant**: Advanced conversational AI with job search capabilities
 5. **Profile Management**: Update personal and professional information
 6. **Calendar Integration**: Track important dates and interviews
