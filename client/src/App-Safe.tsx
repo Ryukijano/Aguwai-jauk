@@ -22,7 +22,7 @@ const Applications = lazy(() => import("@/pages/Applications"));
 const AIAssistant = lazy(() => import("@/pages/AIAssistant"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
 const Documents = lazy(() => import("@/pages/Documents"));
-const JobTracker = lazy(() => import("@/pages/JobTracker"));
+const JobTracker = lazy(() => import("@/pages/JobTracker-Safe"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Login = lazy(() => import("@/pages/auth/Login"));
 const Register = lazy(() => import("@/pages/auth/Register"));
