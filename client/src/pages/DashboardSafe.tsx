@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import MainLayout from "@/components/layout/MainLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
 import JobListingsSection from "@/components/dashboard/JobListingsSection";
@@ -9,63 +9,24 @@ import { Briefcase, FileText, CalendarCheck, Bell } from "lucide-react";
 import { Stat, User, JobListing, Application, Event } from "@/lib/types";
 
 const DashboardSafe = () => {
-  // Use simple state instead of useQuery initially
-  const [user, setUser] = useState<User | null>(null);
-  const [jobs, setJobs] = useState<JobListing[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use TanStack Query with the default queryFn configured in queryClient
+  const { data: user } = useQuery<User | null>({
+    queryKey: ["/api/auth/user"],
+  });
 
-  useEffect(() => {
-    // Fetch data manually without useQuery
-    const fetchData = async () => {
-      try {
-        // Fetch user
-        try {
-          const userRes = await fetch("/api/auth/user", { credentials: "include" });
-          if (userRes.ok) {
-            setUser(await userRes.json());
-          }
-        } catch (e) {
-          console.log("User not authenticated");
-        }
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobListing[]>({
+    queryKey: ["/api/jobs"],
+  });
 
-        // Fetch jobs
-        try {
-          const jobsRes = await fetch("/api/jobs", { credentials: "include" });
-          if (jobsRes.ok) {
-            setJobs(await jobsRes.json());
-          }
-        } catch (e) {
-          console.error("Failed to fetch jobs", e);
-        }
+  const { data: applications = [] } = useQuery<Application[]>({
+    queryKey: ["/api/applications"],
+  });
 
-        // Fetch applications
-        try {
-          const appsRes = await fetch("/api/applications", { credentials: "include" });
-          if (appsRes.ok) {
-            setApplications(await appsRes.json());
-          }
-        } catch (e) {
-          console.log("Failed to fetch applications");
-        }
+  const { data: events = [] } = useQuery<Event[]>({
+    queryKey: ["/api/events"],
+  });
 
-        // Fetch events
-        try {
-          const eventsRes = await fetch("/api/events", { credentials: "include" });
-          if (eventsRes.ok) {
-            setEvents(await eventsRes.json());
-          }
-        } catch (e) {
-          console.log("Failed to fetch events");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  const isLoading = jobsLoading;
 
   // Calculate upcoming deadlines safely
   const upcomingDeadlines = Array.isArray(jobs) ? jobs.filter(job => {
@@ -152,20 +113,14 @@ const DashboardSafe = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-8 space-y-6">
-            <JobListingsSection 
-              jobs={jobs} 
-              isLoading={isLoadingJobs}
-            />
+            <JobListingsSection />
             <AIInsights />
           </div>
 
           {/* Right Column - Sidebar */}
           <div className="lg:col-span-4 space-y-6">
-            <ProfileBio user={user} />
-            <CalendarWidget 
-              events={events} 
-              isLoading={isLoadingEvents}
-            />
+            <ProfileBio />
+            <CalendarWidget />
           </div>
         </div>
       </div>

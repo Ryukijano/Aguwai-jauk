@@ -16,6 +16,24 @@
 </head>
 <body>
   <div id="root"></div>
+  <script type="module">
+    try {
+      if (import.meta.env.DEV) {
+        import('/@react-refresh').then((RefreshRuntime) => {
+          if (RefreshRuntime && RefreshRuntime.injectIntoGlobalHook) {
+            RefreshRuntime.injectIntoGlobalHook(window);
+            window.$RefreshReg$ = () => {};
+            window.$RefreshSig$ = () => (type) => type;
+            window.__vite_plugin_react_preamble_installed__ = true;
+          }
+        }).catch(() => {
+          // Fast refresh not available, continue without it
+        });
+      }
+    } catch (e) {
+      // Ignore errors in production or when fast refresh is not available
+    }
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

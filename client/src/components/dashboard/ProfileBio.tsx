@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { User, SocialLink } from "@/lib/types";
+import { User, SocialLink, Application } from "@/lib/types";
 import { Linkedin, Youtube, Instagram, Globe, User as UserIcon } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
@@ -175,13 +175,13 @@ const ProfileBio = () => {
     queryKey: ["/api/social-links"],
   });
 
-  const { data: applications } = useQuery({
+  const { data: applications } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
   });
 
   const statistics = {
     applications: applications?.length || 0,
-    interviews: applications?.filter(app => app.status === "Interview Scheduled").length || 0,
+    interviews: applications?.filter((app: any) => app.status === "Interview Scheduled").length || 0,
     profileComplete: 85, 
   };
 
