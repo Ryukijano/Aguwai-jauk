@@ -1,9 +1,14 @@
-import { StrictMode } from 'react';
+import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import DashboardSafe from '@/pages/DashboardSafe';
 import './index.css';
+
+// Ensure React global is available for HMR
+if (typeof window !== 'undefined') {
+  window.React = React;
+}
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -25,12 +30,17 @@ const queryClient = new QueryClient({
   },
 });
 
-// Direct render without extra component wrapper
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <DashboardSafe />
-      <Toaster />
-    </QueryClientProvider>
-  </StrictMode>
-);
+// Delay initial render to ensure React is properly loaded
+setTimeout(() => {
+  const rootElement = document.getElementById('root');
+  if (rootElement) {
+    createRoot(rootElement).render(
+      <StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <DashboardSafe />
+          <Toaster />
+        </QueryClientProvider>
+      </StrictMode>
+    );
+  }
+}, 100);
