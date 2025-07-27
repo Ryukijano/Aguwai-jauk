@@ -1,21 +1,27 @@
 #!/bin/bash
-# Production deployment script with error handling
+
+# Production deployment script for Teacher Job Portal Assam
+# Handles build and start with error handling
+
+set -e  # Exit on any error
 
 echo "Starting production deployment..."
 
-# Set NODE_ENV to production
+# Set production environment
 export NODE_ENV=production
 
-# Build the application
-echo "Building application..."
-npm run build
-
-# Check if build was successful
-if [ $? -ne 0 ]; then
-    echo "Build failed! Exiting..."
+echo "Building the application..."
+if ! npm run build; then
+    echo "❌ Build failed! Check the build logs above."
     exit 1
 fi
 
-# Start the production server
-echo "Starting production server..."
-npm run start
+echo "✅ Build completed successfully!"
+
+echo "Starting the production server..."
+if ! npm run start; then
+    echo "❌ Failed to start the production server!"
+    exit 1
+fi
+
+echo "✅ Production server started successfully!"

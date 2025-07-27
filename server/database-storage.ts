@@ -204,11 +204,6 @@ export class DatabaseStorage implements IStorage {
     return result.rows;
   }
 
-  async getAllJobs(): Promise<JobListing[]> {
-    const result = await this.pool.query('SELECT * FROM job_listings ORDER BY created_at DESC');
-    return result.rows;
-  }
-
   async createJobListing(jobListing: InsertJobListing): Promise<JobListing> {
     const { title, organization, location, description, requirements, salary, applicationDeadline, jobType, category, tags, source, sourceUrl, aiSummary } = jobListing;
     const result = await this.pool.query(

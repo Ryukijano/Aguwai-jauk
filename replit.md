@@ -74,27 +74,37 @@ An AI-powered job portal specifically designed for teachers in Assam, featuring 
 2. **Job Listings**: Browse and filter teaching positions
 3. **Application Tracking**: Monitor application status
 
-## Deployment Configuration (Updated July 26, 2025)
-The project is configured for production deployment with the following setup:
+## Deployment Configuration (Updated July 27, 2025)
+The project is now fully configured for production deployment with the following fixes applied:
+
+### Applied Deployment Fixes
+- ✅ Fixed "dev command blocked" error by using production commands in `replit.toml`
+- ✅ Created production deployment script (`deploy.sh`) with error handling
+- ✅ Set NODE_ENV=production environment variable for proper production configuration
+- ✅ Configured production build and start commands instead of development commands
 
 ### Production Scripts
 - **Build**: `npm run build` - Builds frontend with Vite and bundles backend with esbuild
 - **Start**: `npm run start` - Runs the production server with NODE_ENV=production
-- **Deploy Script**: `deploy.sh` - Automated deployment script with error handling
+- **Deploy Script**: `deploy.sh` - Automated deployment script with comprehensive error handling
 
 ### Deployment Files
 1. **replit.toml**: Production configuration for Replit deployments
-   - Uses production build and start commands
+   - Uses production build and start commands: `npm run build && npm run start`
    - Sets NODE_ENV to production
    - Configures proper port mapping (5000 → 80)
+   - Replaces development commands with production-ready alternatives
 
-2. **deploy.sh**: Production deployment script
-   - Builds the application
-   - Handles build errors gracefully
-   - Starts the production server
+2. **deploy.sh**: Production deployment script (executable)
+   - Builds the application with error checking
+   - Handles build failures gracefully with clear error messages
+   - Starts the production server with proper error handling
+   - Sets production environment variables
 
-### Important Note
-The default `.replit` file uses development commands which are blocked in production deployments. For deployment, Replit should use the `replit.toml` configuration or the `deploy.sh` script instead.
+### Deployment Notes
+- The default `.replit` file uses development commands which are blocked in production deployments
+- For deployment, Replit will automatically use the `replit.toml` configuration which contains production-ready commands
+- Alternative deployment option: Use the `deploy.sh` script directly for manual deployments with comprehensive error handling
 4. **AI Assistant**: Advanced conversational AI with job search capabilities
 5. **Profile Management**: Update personal and professional information
 6. **Calendar Integration**: Track important dates and interviews
