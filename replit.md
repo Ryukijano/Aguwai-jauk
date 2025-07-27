@@ -134,6 +134,13 @@ The project is now fully configured for production deployment with all deploymen
 
 ### Deployment Status
 🟢 **READY FOR DEPLOYMENT** - All configuration files are properly set up for production deployment
+
+### How to Deploy
+1. **Automatic Deployment**: Click the Deploy button in Replit - it will automatically use `replit.toml` with production commands
+2. **Manual Deployment**: Run `./deploy.sh` for manual deployment with error handling
+3. **Direct Commands**: Use `npm run build && npm run start` for production mode
+
+The deployment will now use production commands instead of blocked development commands.
 4. **AI Assistant**: Advanced conversational AI with job search capabilities
 5. **Profile Management**: Update personal and professional information
 6. **Calendar Integration**: Track important dates and interviews
