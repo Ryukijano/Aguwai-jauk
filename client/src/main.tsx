@@ -27,15 +27,38 @@ const queryClient = new QueryClient({
   },
 });
 
+// Simple test component
+const TestApp = () => {
+  return (
+    <div style={{ 
+      padding: '20px', 
+      backgroundColor: '#f0f0f0', 
+      minHeight: '100vh',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      <h1 style={{ color: '#333' }}>Teacher Job Portal - Loading...</h1>
+      <p>React is working correctly!</p>
+    </div>
+  );
+};
+
 // Render the app
 const rootElement = document.getElementById('root');
 if (rootElement) {
-  createRoot(rootElement).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <DashboardSafe />
-        <Toaster />
-      </QueryClientProvider>
-    </StrictMode>
-  );
+  console.log('Root element found, rendering app...');
+  
+  try {
+    createRoot(rootElement).render(<TestApp />);
+    console.log('App rendered successfully');
+  } catch (error) {
+    console.error('Error rendering app:', error);
+    rootElement.innerHTML = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <h1>Error Loading Application</h1>
+        <pre>${error}</pre>
+      </div>
+    `;
+  }
+} else {
+  console.error('Root element not found');
 }
