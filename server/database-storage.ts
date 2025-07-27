@@ -23,7 +23,7 @@ const PostgresSessionStore = connectPgSimple(session);
 
 export class DatabaseStorage implements IStorage {
   private pool: Pool;
-  public sessionStore: session.Store;
+  public sessionStore: Express.SessionStore;
 
   constructor() {
     this.pool = new Pool({
@@ -35,7 +35,7 @@ export class DatabaseStorage implements IStorage {
       pool: this.pool,
       createTableIfMissing: true,
       tableName: 'session'
-    });
+    }) as unknown as Express.SessionStore;
 
     // Initialize database schema
     this.initializeDatabase().catch(console.error);
