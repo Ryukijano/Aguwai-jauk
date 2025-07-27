@@ -145,7 +145,7 @@ The project is now fully configured for production deployment with all deploymen
 2. **Manual Deployment**: Run `./deploy.sh` for manual deployment with error handling
 3. **Direct Commands**: Use `npm run build && npm run start` for production mode
 
-The deployment will now use production commands instead of blocked development commands.
+**IMPORTANT**: The deployment will use the production configuration from `replit.toml`, NOT the `.replit` file. This is why deployment works correctly even though `.replit` contains development commands.
 4. **AI Assistant**: Advanced conversational AI with job search capabilities
 5. **Profile Management**: Update personal and professional information
 6. **Calendar Integration**: Track important dates and interviews
