@@ -17,8 +17,20 @@
 
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+      <h2>Loading Teacher Job Portal...</h2>
+      <p>If this message persists, please check your browser console for errors.</p>
+    </div>
+  </div>
 
+  <script>
+    // Test if JavaScript is working
+    console.log('JavaScript is executing');
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, root element:', document.getElementById('root'));
+    });
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
