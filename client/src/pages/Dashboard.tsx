@@ -1,153 +1,173 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import MainLayout from "@/components/layout/MainLayout";
-import StatsGrid from "@/components/dashboard/StatsGrid";
-import JobListingsSection from "@/components/dashboard/JobListingsSection";
-import AIInsights from "@/components/dashboard/AIInsights";
-import ProfileBio from "@/components/dashboard/ProfileBio";
-import CalendarWidget from "@/components/dashboard/CalendarWidget";
-import { Briefcase, FileText, CalendarCheck, Bell } from "lucide-react";
-import { Stat, User, JobListing, Application, Event } from "@/lib/types";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Briefcase, Users, Calendar, TrendingUp, FileText, Bell } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 
-const Dashboard = () => {
-  // Provide default values and handle errors gracefully
-  const { data: user } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
-    retry: false,
+export const Dashboard: React.FC = () => {
+  const { data: user } = useQuery({
+    queryKey: ['/api/me']
   });
 
-  const { data: jobs = [], isLoading: isLoadingJobs } = useQuery<JobListing[]>({
-    queryKey: ["/api/jobs"],
-    retry: false,
+  const { data: applications = [] } = useQuery({
+    queryKey: ['/api/applications']
   });
 
-  const { data: applications = [], isLoading: isLoadingApplications } = useQuery<Application[]>({
-    queryKey: ["/api/applications"],
-    retry: false,
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['/api/jobs']
   });
 
-  const { data: events = [], isLoading: isLoadingEvents } = useQuery<Event[]>({
-    queryKey: ["/api/events"],
-    retry: false,
-  });
-
-  // Calculate upcoming deadlines safely
-  const upcomingDeadlines = Array.isArray(jobs) ? jobs.filter(job => {
-    if (!job?.applicationDeadline) return false;
-    const deadline = new Date(job.applicationDeadline);
-    const today = new Date();
-    return deadline > today && ((deadline.getTime() - today.getTime()) / (1000 * 3600 * 24)) <= 7;
-  }).length : 0;
-
-  // Get interview count safely
-  const interviewCount = Array.isArray(applications) ? applications.filter(app => 
-    app?.status === "Interview Scheduled" && app?.interviewDate
-  ).length : 0;
-
-  const stats: Stat[] = [
-    {
-      label: "Available Jobs",
-      value: Array.isArray(jobs) ? jobs.length : 0,
-      icon: "briefcase",
-      color: "primary",
-      trend: {
-        value: "12%",
-        direction: "up",
-        label: "from last week"
-      }
-    },
-    {
-      label: "Applications",
-      value: Array.isArray(applications) ? applications.length : 0,
-      icon: "file-text",
-      color: "secondary",
-      trend: {
-        value: "5%",
-        direction: "up",
-        label: "from last month"
-      }
-    },
-    {
-      label: "Interviews",
-      value: interviewCount,
-      icon: "calendar-check",
-      color: "accent",
-      trend: {
-        value: Array.isArray(events) && events.length > 0 && events[0]?.startTime
-          ? `Next: ${new Date(events[0].startTime).toLocaleDateString()}`
-          : 'None',
-        direction: "neutral",
-        label: ""
-      }
-    },
-    {
-      label: "Deadlines",
-      value: upcomingDeadlines,
-      icon: "bell",
-      color: "red",
-      trend: {
-        value: upcomingDeadlines > 0 ? "Closest: 3 days" : "None upcoming",
-        direction: "down",
-        label: ""
-      }
-    }
-  ];
+  const stats = {
+    totalJobs: jobs.length,
+    applications: applications.length,
+    interviews: applications.filter((app: any) => app.status === 'interview').length,
+    pending: applications.filter((app: any) => app.status === 'Pending').length
+  };
 
   return (
-    <MainLayout>
+    <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl shadow-md p-6 mb-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-          <div>
-            <h1 className="text-3xl font-heading font-bold mb-2 text-white">
-              Welcome back, {user?.name || "Teacher"}
-            </h1>
-            <p className="text-gray-900 font-medium">
-              You have {Array.isArray(applications) ? applications.length : 0} pending applications and{" "}
-              {Array.isArray(jobs) ? jobs.length : 0} new teaching jobs matching your profile.
+      <div>
+        <h1 className="text-3xl font-bold">Welcome back, {user?.fullName || user?.username}!</h1>
+        <p className="text-muted-foreground mt-2">
+          Here's an overview of your job search progress
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available Jobs</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalJobs}</div>
+            <p className="text-xs text-muted-foreground">+12% from last week</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Applications</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.applications}</div>
+            <p className="text-xs text-muted-foreground">{stats.pending} pending</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Interviews</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.interviews}</div>
+            <p className="text-xs text-muted-foreground">Next on Monday</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Profile Views</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">89</div>
+            <p className="text-xs text-muted-foreground">+19% from last month</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-4">
+          <Link href="/jobs">
+            <Button>
+              <Briefcase className="mr-2 h-4 w-4" />
+              Browse Jobs
+            </Button>
+          </Link>
+          <Link href="/profile">
+            <Button variant="outline">
+              <Users className="mr-2 h-4 w-4" />
+              Update Profile
+            </Button>
+          </Link>
+          <Button variant="outline">
+            <FileText className="mr-2 h-4 w-4" />
+            Upload Resume
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Recent Applications */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Applications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {applications.length === 0 ? (
+            <p className="text-muted-foreground">No applications yet. Start applying to jobs!</p>
+          ) : (
+            <div className="space-y-4">
+              {applications.slice(0, 5).map((app: any) => (
+                <div key={app.id} className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Application #{app.id}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Applied on {new Date(app.appliedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className={`text-sm px-2 py-1 rounded-full ${
+                    app.status === 'interview' ? 'bg-green-100 text-green-700' :
+                    app.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                    'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {app.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Insights */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            AI Insights
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <h4 className="font-medium text-blue-900">Profile Optimization</h4>
+            <p className="text-sm text-blue-700 mt-1">
+              Add your teaching certifications to increase profile views by 40%
             </p>
           </div>
-          <div className="mt-4 md:mt-0">
-            <button className="bg-white text-primary-600 hover:bg-primary-50 font-medium px-6 py-3 md:px-4 md:py-2 rounded-lg flex items-center transition min-h-[48px] min-w-[48px]">
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5 mr-2" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" 
-                />
-              </svg>
-              Upload Resume
-            </button>
+          <div className="p-4 bg-green-50 rounded-lg">
+            <h4 className="font-medium text-green-900">Trending Jobs</h4>
+            <p className="text-sm text-green-700 mt-1">
+              Primary school positions in Guwahati have increased by 25% this month
+            </p>
           </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <StatsGrid stats={stats} />
-
-      {/* Main Content Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - Recent Job Listings and AI Insights */}
-        <div className="lg:col-span-2 space-y-6">
-          <JobListingsSection limit={3} showFilters={true} showViewAll={true} />
-          <AIInsights />
-        </div>
-
-        {/* Right Column - Profile and Calendar */}
-        <div className="space-y-6">
-          <ProfileBio />
-          <CalendarWidget />
-        </div>
-      </div>
-    </MainLayout>
+          <div className="p-4 bg-purple-50 rounded-lg">
+            <h4 className="font-medium text-purple-900">Interview Tip</h4>
+            <p className="text-sm text-purple-700 mt-1">
+              Practice classroom management scenarios - 80% of interviews include this topic
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
-
-export default Dashboard;

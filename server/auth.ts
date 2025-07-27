@@ -35,7 +35,7 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
-        const user = await storage.getUserByUsername(username);
+        const user = await storage.getUser(username);
         if (!user) {
           return done(null, false, { message: "Invalid username or password" });
         }
@@ -66,7 +66,7 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      const user = await storage.getUser(id);
+      const user = await storage.getUserById(id);
       if (!user) {
         return done(null, false);
       }
@@ -81,11 +81,10 @@ export function setupAuth(app: Express) {
     try {
       console.log("Registration attempt:", {
         username: req.body.username,
-        name: req.body.name,
         email: req.body.email
       });
 
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      const existingUser = await storage.getUser(req.body.username);
       if (existingUser) {
         console.log("Registration failed: Username already exists");
         return res.status(400).json({ message: "Username already exists" });
@@ -99,8 +98,7 @@ export function setupAuth(app: Express) {
 
       console.log("User created successfully:", {
         id: user.id,
-        username: user.username,
-        name: user.name
+        username: user.username
       });
 
       req.login(user, (err) => {
@@ -111,7 +109,7 @@ export function setupAuth(app: Express) {
         res.status(201).json({
           id: user.id,
           username: user.username,
-          name: user.name,
+          name: user.fullName,
           email: user.email
         });
       });
@@ -138,7 +136,7 @@ export function setupAuth(app: Express) {
         return res.json({
           id: user.id,
           username: user.username,
-          name: user.name,
+          name: user.fullName,
           email: user.email
         });
       });
@@ -171,7 +169,7 @@ export function setupAuth(app: Express) {
     res.json({
       id: user.id,
       username: user.username,
-      name: user.name,
+      name: user.fullName,
       email: user.email
     });
   });

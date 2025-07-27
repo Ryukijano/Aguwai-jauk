@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { setupRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { setupAuth } from "./auth";
 import session from "express-session";
 import { storage } from "./storage";
 
@@ -67,11 +66,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Set up authentication after session middleware
-  setupAuth(app);
-
-  // Register API routes before Vite middleware
-  const server = await registerRoutes(app);
+  // Setup all routes (includes authentication)
+  setupRoutes(app, storage);
 
   // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -81,6 +77,10 @@ app.use((req, res, next) => {
     console.error(err);
   });
 
+  // Create the server
+  const { createServer } = await import('http');
+  const server = createServer(app);
+  
   // Only setup vite/static serving after API routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
@@ -90,11 +90,7 @@ app.use((req, res, next) => {
 
   // ALWAYS serve the app on port 5000
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
 })();

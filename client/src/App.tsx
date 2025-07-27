@@ -1,146 +1,224 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Router, Route, Switch, Link, useLocation } from 'wouter';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { Briefcase, Users, MapPin, Calendar } from 'lucide-react';
+import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react';
 
-const App = () => {
+// Pages
+import { Login } from '@/pages/Login';
+import { Dashboard } from '@/pages/Dashboard';
+import { Jobs } from '@/pages/Jobs';
+import { Applications } from '@/pages/Applications';
+import { Profile } from '@/pages/Profile';
+
+// Components
+import { AiAssistant } from '@/components/AiAssistant';
+
+// Create query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
+// Main Layout Component
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [location, setLocation] = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is logged in
+    fetch('/api/me', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setUser(data))
+      .catch(() => setUser(null));
+  }, [location]);
+
+  const handleLogout = async () => {
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+    setUser(null);
+    setLocation('/login');
+  };
+
+  const isActive = (path: string) => location === path;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-2">
-              <Briefcase className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">Teacher Job Portal - Assam</h1>
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <Link href="/dashboard">
+                <a className="flex items-center space-x-2">
+                  <Briefcase className="h-8 w-8 text-blue-600" />
+                  <h1 className="text-xl font-bold text-gray-900 hidden sm:block">
+                    Teacher Job Portal - Assam
+                  </h1>
+                  <h1 className="text-xl font-bold text-gray-900 sm:hidden">
+                    TJP Assam
+                  </h1>
+                </a>
+              </Link>
             </div>
-            <nav className="flex space-x-4">
-              <Button variant="ghost">Dashboard</Button>
-              <Button variant="ghost">Jobs</Button>
-              <Button variant="ghost">Applications</Button>
-              <Button variant="ghost">Profile</Button>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-1">
+              <Link href="/dashboard">
+                <Button variant={isActive('/dashboard') ? 'default' : 'ghost'} size="sm">
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/jobs">
+                <Button variant={isActive('/jobs') ? 'default' : 'ghost'} size="sm">
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  Jobs
+                </Button>
+              </Link>
+              <Link href="/applications">
+                <Button variant={isActive('/applications') ? 'default' : 'ghost'} size="sm">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Applications
+                </Button>
+              </Link>
+              <Link href="/profile">
+                <Button variant={isActive('/profile') ? 'default' : 'ghost'} size="sm">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+              </Link>
+              {user && (
+                <Button variant="ghost" size="sm" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              )}
             </nav>
+
+            {/* Mobile menu button */}
+            <button
+              className="md:hidden p-2"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-white border-t">
+            <div className="px-2 pt-2 pb-3 space-y-1">
+              <Link href="/dashboard">
+                <Button
+                  variant={isActive('/dashboard') ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/jobs">
+                <Button
+                  variant={isActive('/jobs') ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  Jobs
+                </Button>
+              </Link>
+              <Link href="/applications">
+                <Button
+                  variant={isActive('/applications') ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Applications
+                </Button>
+              </Link>
+              <Link href="/profile">
+                <Button
+                  variant={isActive('/profile') ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+              </Link>
+              {user && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available Jobs</CardTitle>
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">145</div>
-              <p className="text-xs text-muted-foreground">+12% from last week</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Applications</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">23</div>
-              <p className="text-xs text-muted-foreground">5 under review</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Interviews</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">3</div>
-              <p className="text-xs text-muted-foreground">Next on Monday</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Profile Views</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">89</div>
-              <p className="text-xs text-muted-foreground">+19% from last month</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Job Listings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Job Postings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Job 1 */}
-              <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">Mathematics Teacher</h3>
-                    <p className="text-gray-600">St. Mary's School, Guwahati</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> Guwahati
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Posted 2 days ago
-                      </span>
-                    </div>
-                  </div>
-                  <Button>Apply Now</Button>
-                </div>
-              </div>
-
-              {/* Job 2 */}
-              <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">English Teacher</h3>
-                    <p className="text-gray-600">Government High School, Dibrugarh</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> Dibrugarh
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Posted 3 days ago
-                      </span>
-                    </div>
-                  </div>
-                  <Button>Apply Now</Button>
-                </div>
-              </div>
-
-              {/* Job 3 */}
-              <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">Science Teacher</h3>
-                    <p className="text-gray-600">Don Bosco School, Jorhat</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> Jorhat
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Posted 5 days ago
-                      </span>
-                    </div>
-                  </div>
-                  <Button>Apply Now</Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {children}
       </main>
+
+      {/* AI Assistant */}
+      {user && <AiAssistant />}
     </div>
+  );
+};
+
+// Main App Component
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <Switch>
+          <Route path="/login" component={Login} />
+          <Route path="/dashboard">
+            <Layout>
+              <Dashboard />
+            </Layout>
+          </Route>
+          <Route path="/jobs">
+            <Layout>
+              <Jobs />
+            </Layout>
+          </Route>
+          <Route path="/applications">
+            <Layout>
+              <Applications />
+            </Layout>
+          </Route>
+          <Route path="/profile">
+            <Layout>
+              <Profile />
+            </Layout>
+          </Route>
+          <Route>
+            {/* Default redirect to login */}
+            <Login />
+          </Route>
+        </Switch>
+      </Router>
+      <Toaster />
+    </QueryClientProvider>
   );
 };
 

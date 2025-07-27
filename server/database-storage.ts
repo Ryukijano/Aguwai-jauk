@@ -121,10 +121,15 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // User operations
-  async getUser(id: number): Promise<User | undefined> {
+  // User operations (implement IStorage interface)
+  async getUser(username: string): Promise<User | null> {
+    const result = await this.pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    return result.rows[0] || null;
+  }
+
+  async getUserById(id: number): Promise<User | null> {
     const result = await this.pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -143,7 +148,7 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0];
   }
 
-  async updateUser(id: number, updates: Partial<InsertUser>): Promise<User | undefined> {
+  async updateUser(id: number, updates: Partial<InsertUser>): Promise<User | null> {
     const fields = [];
     const values = [];
     let index = 1;
@@ -157,18 +162,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    if (fields.length === 0) return this.getUser(id);
+    if (fields.length === 0) return this.getUserById(id);
 
     values.push(id);
     const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${index} RETURNING *`;
     const result = await this.pool.query(query, values);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   // Job listing operations
-  async getJobListing(id: number): Promise<JobListing | undefined> {
+  async getJobListing(id: number): Promise<JobListing | null> {
     const result = await this.pool.query('SELECT * FROM job_listings WHERE id = $1', [id]);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   async getAllJobs(): Promise<JobListing[]> {
@@ -176,7 +181,7 @@ export class DatabaseStorage implements IStorage {
     return result.rows;
   }
 
-  async getJobListings(filters?: Partial<JobListing>): Promise<JobListing[]> {
+  async getJobListings(filters?: { category?: string; location?: string; search?: string }): Promise<JobListing[]> {
     let query = 'SELECT * FROM job_listings WHERE 1=1';
     const values = [];
     let index = 1;
@@ -192,9 +197,9 @@ export class DatabaseStorage implements IStorage {
         values.push(`%${filters.location}%`);
         index++;
       }
-      if (filters.jobType) {
-        query += ` AND job_type = $${index}`;
-        values.push(filters.jobType);
+      if (filters.search) {
+        query += ` AND (title ILIKE $${index} OR description ILIKE $${index})`;
+        values.push(`%${filters.search}%`);
         index++;
       }
     }
@@ -215,7 +220,7 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0];
   }
 
-  async updateJobListing(id: number, updates: Partial<InsertJobListing>): Promise<JobListing | undefined> {
+  async updateJobListing(id: number, updates: Partial<InsertJobListing>): Promise<JobListing | null> {
     const fields = [];
     const values = [];
     let index = 1;
@@ -234,13 +239,23 @@ export class DatabaseStorage implements IStorage {
     values.push(id);
     const query = `UPDATE job_listings SET ${fields.join(', ')} WHERE id = $${index} RETURNING *`;
     const result = await this.pool.query(query, values);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
-  // Application operations
-  async getApplication(id: number): Promise<Application | undefined> {
+  // Application operations (implement IStorage interface)
+  async getApplications(userId: number): Promise<Application[]> {
+    const result = await this.pool.query('SELECT * FROM applications WHERE user_id = $1 ORDER BY applied_at DESC', [userId]);
+    return result.rows;
+  }
+  
+  async getApplication(id: number): Promise<Application | null> {
     const result = await this.pool.query('SELECT * FROM applications WHERE id = $1', [id]);
-    return result.rows[0];
+    return result.rows[0] || null;
+  }
+  
+  async getApplicationByUserAndJob(userId: number, jobId: number): Promise<Application | null> {
+    const result = await this.pool.query('SELECT * FROM applications WHERE user_id = $1 AND job_id = $2', [userId, jobId]);
+    return result.rows[0] || null;
   }
 
   async getUserApplications(userId: number): Promise<Application[]> {
@@ -259,7 +274,7 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0];
   }
 
-  async updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application | undefined> {
+  async updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application | null> {
     const fields = [];
     const values = [];
     let index = 1;
@@ -278,11 +293,11 @@ export class DatabaseStorage implements IStorage {
     values.push(id);
     const query = `UPDATE applications SET ${fields.join(', ')} WHERE id = $${index} RETURNING *`;
     const result = await this.pool.query(query, values);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
-  // Social link operations
-  async getUserSocialLinks(userId: number): Promise<SocialLink[]> {
+  // Social link operations (implement IStorage interface)
+  async getSocialLinks(userId: number): Promise<SocialLink[]> {
     const result = await this.pool.query('SELECT * FROM social_links WHERE user_id = $1', [userId]);
     return result.rows;
   }
@@ -319,11 +334,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSocialLink(id: number): Promise<boolean> {
     const result = await this.pool.query('DELETE FROM social_links WHERE id = $1', [id]);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  // Document operations
-  async getUserDocuments(userId: number): Promise<Document[]> {
+  // Document operations (implement IStorage interface)
+  async getDocuments(userId: number): Promise<Document[]> {
     const result = await this.pool.query('SELECT * FROM documents WHERE user_id = $1', [userId]);
     return result.rows;
   }
@@ -360,11 +375,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<boolean> {
     const result = await this.pool.query('DELETE FROM documents WHERE id = $1', [id]);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  // Event operations
-  async getUserEvents(userId: number): Promise<Event[]> {
+  // Event operations (implement IStorage interface)
+  async getEvents(userId: number): Promise<Event[]> {
     const result = await this.pool.query('SELECT * FROM events WHERE user_id = $1 ORDER BY date ASC', [userId]);
     return result.rows;
   }
@@ -378,7 +393,7 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0];
   }
 
-  async updateEvent(id: number, updates: Partial<InsertEvent>): Promise<Event | undefined> {
+  async updateEvent(id: number, updates: Partial<InsertEvent>): Promise<Event | null> {
     const fields = [];
     const values = [];
     let index = 1;
@@ -391,25 +406,36 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    if (fields.length === 0) return undefined;
+    if (fields.length === 0) return null;
 
     values.push(id);
     const query = `UPDATE events SET ${fields.join(', ')} WHERE id = $${index} RETURNING *`;
     const result = await this.pool.query(query, values);
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   async deleteEvent(id: number): Promise<boolean> {
     const result = await this.pool.query('DELETE FROM events WHERE id = $1', [id]);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  // Chat message operations
-  async getUserChatMessages(userId: number): Promise<ChatMessage[]> {
-    const result = await this.pool.query(
-      'SELECT * FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC',
-      [userId]
-    );
+  // Chat message operations (implement IStorage interface)
+  async getChatMessages(userId: number | null, sessionId?: string): Promise<ChatMessage[]> {
+    let query = 'SELECT * FROM chat_messages WHERE ';
+    const params = [];
+    
+    if (userId !== null) {
+      query += 'user_id = $1';
+      params.push(userId);
+    } else if (sessionId) {
+      query += 'session_id = $1';
+      params.push(sessionId);
+    } else {
+      return [];
+    }
+    
+    query += ' ORDER BY timestamp ASC';
+    const result = await this.pool.query(query, params);
     return result.rows;
   }
 
