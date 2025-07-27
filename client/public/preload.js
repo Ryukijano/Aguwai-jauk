@@ -1,12 +1,18 @@
 // Comprehensive fix for RefreshRuntime and runtime error overlay
 (function() {
-  // First, ensure RefreshRuntime exists and has all required methods
-  if (!window.RefreshRuntime) {
-    window.RefreshRuntime = {};
-  }
+  'use strict';
+  
+  // Always create a fresh RefreshRuntime object to ensure all methods exist
+  window.RefreshRuntime = window.RefreshRuntime || {};
   
   // Define all RefreshRuntime methods with proper implementations
   const RefreshRuntime = window.RefreshRuntime;
+  
+  // Add a flag to prevent re-initialization
+  if (RefreshRuntime._initialized) {
+    return;
+  }
+  RefreshRuntime._initialized = true;
   
   // Core registration function that the runtime error plugin expects
   RefreshRuntime.register = RefreshRuntime.register || function(id, fn) { 
