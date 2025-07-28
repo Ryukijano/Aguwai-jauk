@@ -21,15 +21,47 @@ An AI-powered job portal specifically designed for teachers in Assam, featuring 
   - Google Gemini for multimodal capabilities and resume analysis
   - Advanced agent system with function calling for job search, resume analysis, and interview prep
 
-### AI Assistant Features (as of July 25, 2025)
+### AI Assistant Features (as of July 28, 2025)
 - **Fixed Popup Widget**: AI chat appears as a fixed popup at bottom-right of screen
-- **Multi-Agent System**: 
-  - Job search agent with real-time filtering
-  - Resume analysis with strengths/weaknesses identification
-  - Interview preparation with tailored questions
-  - Application tracking capabilities
-- **Dual AI Models**: Uses both OpenAI and Google Gemini for enhanced capabilities
-- **Session-based History**: Maintains conversation context across sessions
+- **Advanced Multi-Agent System with LangGraph Orchestration**: 
+  - **Supervisor Agent**: Intelligently routes requests to specialized agents using OpenAI GPT-4o
+  - **Resume Analyzer Agent**: Uses Google's ADK patterns with Gemini 2.5 Flash for deep resume analysis
+  - **Job Search Agent**: Searches and filters teaching positions with AI-powered insights
+  - **Interview Prep Agent**: Generates tailored interview questions using OpenAI
+  - **Conversational Agent**: Handles general queries and guidance
+- **Dual AI Models**: 
+  - **OpenAI GPT-4o**: For conversational AI, supervisor decisions, and interview preparation
+  - **Google Gemini 2.5 Flash**: For resume analysis with ADK framework patterns
+- **LangGraph Integration**: 
+  - Stateful multi-agent orchestration with memory persistence
+  - Thread-based conversation management
+  - Short-term memory (thread-scoped) and long-term memory (user profile)
+  - Context-aware responses based on user history
+- **Session-based History**: Maintains conversation context across sessions with enhanced memory store
+
+## Recent Changes
+
+### July 28, 2025 - Advanced Multi-Agent System Implementation
+- **LangGraph Integration**: Implemented comprehensive multi-agent orchestration using LangGraph
+  - Created supervisor agent for intelligent routing between specialized agents
+  - Resume analyzer agent using Google's ADK framework with Gemini 2.5 Flash
+  - Job search agent with context-aware filtering
+  - Interview preparation agent with role-specific questions
+  - Conversational agent for general assistance
+- **Memory Management**: Implemented dual-layer memory system
+  - Thread-level memory for conversation continuity
+  - User-level memory for long-term preferences and history
+  - Resume analysis history tracking
+  - Search history persistence
+- **API Integration**: 
+  - Successfully integrated both OpenAI (GPT-4o) and Google Gemini (2.5 Flash) APIs
+  - Implemented proper error handling for rate limits
+  - Added context enhancement for personalized responses
+- **Architecture Update**: 
+  - Created `server/agents/langgraph-orchestrator.ts` for multi-agent orchestration
+  - Created `server/agents/memory-store.ts` for memory management
+  - Updated AI routes to use new multi-agent system
+  - Maintained backward compatibility with existing endpoints
 
 ## Recent Changes
 

@@ -23,7 +23,7 @@ export const AiAssistant: React.FC = () => {
 
   // Fetch chat messages
   const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ['/api/chat/messages'],
+    queryKey: ['/api/ai/chat-history'],
     enabled: isOpen,
     refetchInterval: false
   });
@@ -31,16 +31,17 @@ export const AiAssistant: React.FC = () => {
   // Send message mutation
   const sendMessage = useMutation({
     mutationFn: async (content: string) => {
-      const response = await fetch('/api/chat/message', {
+      const response = await fetch('/api/ai/agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+        credentials: 'include',
+        body: JSON.stringify({ message: content })
       });
       if (!response.ok) throw new Error('Failed to send message');
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/chat/messages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ai/chat-history'] });
       setInput('');
     }
   });

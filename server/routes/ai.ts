@@ -526,10 +526,10 @@ router.post("/advanced-image", upload.single('image'), async (req, res) => {
   }
 });
 
-// New AI Agent Chat endpoint with Gemini & OpenAI capabilities
+// New AI Agent Chat endpoint with LangGraph multi-agent orchestration
 router.post("/agent-chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, threadId } = req.body;
     const sessionId = req.session.id || 'anonymous';
     const userId = req.session?.userId;
 
@@ -539,9 +539,17 @@ router.post("/agent-chat", async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // Process the message using the advanced AI agent
-    const result = await processAgentChat(message, userId);
+    // Import the new multi-agent system
+    const { processMultiAgentChat } = await import("../agents/langgraph-orchestrator");
+    const { MemoryStore } = await import("../agents/memory-store");
+    
+    // Get user context for enhanced responses
+    const userContext = await MemoryStore.getUserContext(userId || "anonymous");
+    const enhancedMessage = userContext ? `${userContext}\n\nUser message: ${message}` : message;
 
+    // Process with multi-agent system
+    const result = await processMultiAgentChat(enhancedMessage, userId, threadId);
+    
     // Store the messages in the database if a user is authenticated
     if (userId) {
       await storage.createChatMessage({
@@ -552,16 +560,24 @@ router.post("/agent-chat", async (req, res) => {
 
       await storage.createChatMessage({
         userId: userId,
-        content: result.message,
+        content: result.response,
         isFromUser: false,
       });
+      
+      // Save to memory store
+      await MemoryStore.saveThreadMemory(
+        result.threadId,
+        userId,
+        [],
+        { timestamp: new Date() }
+      );
     }
 
-    console.log("Agent response:", result.message.substring(0, 100) + "...");
+    console.log("Agent response:", result.response.substring(0, 100) + "...");
     
     res.json({ 
-      message: result.message,
-      toolsUsed: result.toolsUsed,
+      message: result.response,
+      threadId: result.threadId,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
