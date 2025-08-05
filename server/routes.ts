@@ -153,6 +153,16 @@ export function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
+  router.get("/api/applications/check/:jobId", requireAuth, async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const existing = await storage.getApplicationByUserAndJob(req.user!.id, jobId);
+      res.json({ hasApplied: !!existing });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   router.post("/api/applications", requireAuth, async (req, res) => {
     try {
       const data = insertApplicationSchema.parse({

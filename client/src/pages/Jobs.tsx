@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { MapPin, Calendar, Briefcase, Building, Search } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 
 export const Jobs: React.FC = () => {
   const [filters, setFilters] = useState({
@@ -17,6 +18,7 @@ export const Jobs: React.FC = () => {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   
   const { data: jobs = [], isLoading } = useQuery({
     queryKey: ['/api/jobs', filters],
@@ -199,7 +201,12 @@ export const Jobs: React.FC = () => {
                   >
                     {applyMutation.isPending ? 'Applying...' : 'Apply Now'}
                   </Button>
-                  <Button variant="outline">View Details</Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => navigate(`/jobs/${job.id}`)}
+                  >
+                    View Details
+                  </Button>
                 </div>
               </div>
             </CardContent>

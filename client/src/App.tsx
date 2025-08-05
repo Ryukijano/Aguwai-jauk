@@ -9,6 +9,7 @@ import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react'
 import { Login } from '@/pages/Login';
 import { Dashboard } from '@/pages/Dashboard';
 import { Jobs } from '@/pages/Jobs';
+import { JobDetails } from '@/pages/JobDetails';
 import { Applications } from '@/pages/Applications';
 import { Profile } from '@/pages/Profile';
 
@@ -199,6 +200,11 @@ const App = () => {
           <Route path="/jobs">
             <Layout>
               <Jobs />
+            </Layout>
+          </Route>
+          <Route path="/jobs/:id">
+            <Layout>
+              <JobDetails />
             </Layout>
           </Route>
           <Route path="/applications">

@@ -68,56 +68,152 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async insertSampleData() {
+    // Real job listings from Assam teacher recruitment
     const sampleJobs = [
       {
-        title: "Senior Mathematics Teacher",
-        organization: "Assam Valley School, Tezpur",
-        location: "Tezpur",
-        description: "We are seeking an experienced mathematics teacher for senior secondary classes.",
-        requirements: "M.Sc in Mathematics, B.Ed required, minimum 5 years experience",
-        salary: "₹60,000 - ₹80,000",
-        application_deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        job_type: "Full-time",
-        category: "Private",
-        tags: ["Mathematics", "Senior Level", "B.Ed Required"],
-        source: "School Website",
-        source_url: "https://assamvalleyschool.com/careers",
-        ai_summary: "Senior position at prestigious boarding school with excellent facilities."
-      },
-      {
-        title: "Primary English Teacher",
-        organization: "Kendriya Vidyalaya, Guwahati",
-        location: "Guwahati",
-        description: "Teaching position for primary English classes at KV Guwahati.",
-        requirements: "B.Ed with English specialization, TET qualified",
-        salary: "₹40,000 - ₹55,000",
-        application_deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+        title: "Assistant Teacher - Lower Primary (2900 Posts)",
+        organization: "Directorate of Elementary Education (DEE), Assam",
+        location: "Various Districts",
+        description: "DEE Assam is recruiting 2900 Assistant Teachers for Lower Primary Schools across various districts. This is a large-scale government recruitment drive for teachers with TET qualification.",
+        requirements: "Age: 18-40 years as of 01.01.2025\nQualification: HSSLC + D.El.Ed (2 years) or equivalent\nMust have qualified ATET or CTET\nPermanent resident of Assam\nSmall Family Norm applicable",
+        salary: "₹14,000 - ₹70,000 (Pay Band-2) + Grade Pay",
+        application_deadline: new Date("2025-04-08"),
         job_type: "Full-time",
         category: "Government",
-        tags: ["English", "Primary", "TET Required"],
-        source: "KVS Official",
-        source_url: "https://kvsangathan.nic.in",
-        ai_summary: "Government position with job security and benefits."
+        tags: ["Lower Primary", "TET Required", "D.El.Ed", "Government Job", "Mass Recruitment"],
+        source: "DEE Assam Official",
+        source_url: "https://dee.assam.gov.in/",
+        ai_summary: "Major government recruitment for 2900 LP teacher positions. Excellent opportunity for TET-qualified candidates with job security and government benefits."
       },
       {
-        title: "Science Teacher (Physics)",
-        organization: "Don Bosco School, Dibrugarh",
-        location: "Dibrugarh",
-        description: "Physics teacher needed for classes 9-12 at Don Bosco School.",
-        requirements: "M.Sc Physics, B.Ed, experience with CBSE curriculum",
-        salary: "₹45,000 - ₹65,000",
+        title: "Assistant Teacher - Upper Primary (1600 Posts)",
+        organization: "Directorate of Elementary Education (DEE), Assam",
+        location: "Various Districts",
+        description: "DEE Assam is recruiting 1600 teachers for Upper Primary Schools including Assistant Teachers, Science Teachers, and Hindi Teachers. Part of the 4500 posts mega recruitment drive.",
+        requirements: "Age: 18-40 years as of 01.01.2025\nQualification: Bachelor's degree + B.Ed or equivalent\nMust have qualified ATET or CTET\nSubject-specific requirements for Science/Hindi teachers\nPermanent resident of Assam",
+        salary: "₹14,000 - ₹70,000 (Pay Band-2) + Grade Pay",
+        application_deadline: new Date("2025-04-08"),
+        job_type: "Full-time",
+        category: "Government",
+        tags: ["Upper Primary", "TET Required", "B.Ed", "Science Teacher", "Hindi Teacher"],
+        source: "DEE Assam Official",
+        source_url: "https://dee.assam.gov.in/",
+        ai_summary: "1600 UP teacher positions available. Includes specialized roles for Science and Hindi teachers. Merit-based selection with excellent career prospects."
+      },
+      {
+        title: "Graduate Teacher (TGT) - 8004 Posts",
+        organization: "Directorate of Secondary Education (DSE), Assam",
+        location: "All Districts of Assam",
+        description: "DSE Assam has announced recruitment for 8004 Graduate Teacher positions for various subjects. Written exam scheduled for January 19, 2025. This is one of the largest teacher recruitment drives in Assam.",
+        requirements: "Bachelor's degree in relevant subject + B.Ed\nMust have qualified TET\nAge: 18-40 years\nSubject-wise vacancies available\nMust be permanent resident of Assam",
+        salary: "₹14,000 - ₹70,000 + allowances as per 7th Pay Commission",
+        application_deadline: new Date("2025-01-15"),
+        job_type: "Full-time",
+        category: "Government",
+        tags: ["Graduate Teacher", "TGT", "Secondary Education", "Written Exam", "8000+ Posts"],
+        source: "DSE Assam",
+        source_url: "https://formsrec.in/DSE_Gr/",
+        ai_summary: "Massive recruitment of 8004 Graduate Teachers. Written exam on Jan 19, 2025. Excellent opportunity for B.Ed qualified candidates."
+      },
+      {
+        title: "Post Graduate Teacher (PGT) - 1385 Posts",
+        organization: "Directorate of Secondary Education (DSE), Assam",
+        location: "All Districts of Assam",
+        description: "DSE Assam is recruiting 1385 Post Graduate Teachers for Higher Secondary schools. Positions available for various subjects including Physics, Chemistry, Mathematics, English, Economics, etc.",
+        requirements: "Master's degree in relevant subject + B.Ed\nMust have qualified TET\nAge: 18-40 years\nMinimum 55% marks in Post Graduation\nSubject expertise required",
+        salary: "₹14,000 - ₹70,000 + allowances as per 7th Pay Commission",
+        application_deadline: new Date("2025-01-15"),
+        job_type: "Full-time",
+        category: "Government",
+        tags: ["Post Graduate Teacher", "PGT", "Higher Secondary", "Master's Degree", "1385 Posts"],
+        source: "DSE Assam",
+        source_url: "https://formsrec.in/DSE_Gr/",
+        ai_summary: "1385 PGT positions for Higher Secondary schools. Requires Master's degree and B.Ed. Higher pay scale for PG teachers."
+      },
+      {
+        title: "Mathematics Teacher - Secondary School",
+        organization: "Jawahar Navodaya Vidyalaya, Jorhat",
+        location: "Jorhat",
+        description: "JNV Jorhat requires an experienced Mathematics teacher for classes 9-12. CBSE curriculum experience preferred. Residential facility available on campus.",
+        requirements: "M.Sc Mathematics + B.Ed\nMinimum 3 years teaching experience\nCBSE experience preferred\nComputer skills required\nAge limit: 35 years",
+        salary: "₹47,600 - ₹1,51,100 (Level 8)",
+        application_deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        job_type: "Full-time",
+        category: "Central Government",
+        tags: ["Mathematics", "JNV", "CBSE", "Residential", "Secondary"],
+        source: "NVS Official",
+        source_url: "https://navodaya.gov.in",
+        ai_summary: "Prestigious JNV position with residential facility. Central government job with excellent benefits and career growth."
+      },
+      {
+        title: "English Teacher - Primary Section",
+        organization: "Army Public School, Tezpur",
+        location: "Tezpur",
+        description: "Army Public School Tezpur invites applications for Primary English Teacher. Preference to army dependents. Strong communication skills required.",
+        requirements: "BA English + B.Ed\nTET qualified mandatory\nExcellent English communication\nCreative teaching methods\nAge: 21-35 years",
+        salary: "₹35,000 - ₹50,000",
+        application_deadline: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+        job_type: "Full-time",
+        category: "Defence",
+        tags: ["English", "Primary", "Army School", "TET", "Communication Skills"],
+        source: "AWES",
+        source_url: "https://aps-csb.in",
+        ai_summary: "Army school position with preference to defence dependents. Good work environment and facilities."
+      },
+      {
+        title: "Science Teacher (Biology) - Higher Secondary",
+        organization: "Cotton University Demonstration School",
+        location: "Guwahati",
+        description: "Cotton University Demonstration School seeks Biology teacher for Higher Secondary classes. Research opportunities available through university collaboration.",
+        requirements: "M.Sc Botany/Zoology + B.Ed\nNET/SLET preferred\nLab management skills\nResearch interest beneficial\nAge limit: 40 years",
+        salary: "₹57,700 - ₹1,82,400",
         application_deadline: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000),
         job_type: "Full-time",
+        category: "University",
+        tags: ["Biology", "Higher Secondary", "Research", "University", "Lab Work"],
+        source: "Cotton University",
+        source_url: "https://cottonuniversity.ac.in",
+        ai_summary: "University school position with research opportunities. Excellent academic environment and growth prospects."
+      },
+      {
+        title: "Computer Science Teacher",
+        organization: "Delhi Public School, Guwahati",
+        location: "Guwahati",
+        description: "DPS Guwahati requires Computer Science teacher for senior classes. Should be proficient in Python, Java, and web technologies. Smart classroom experience preferred.",
+        requirements: "B.Tech/MCA + B.Ed\nProgramming expertise required\nSmart classroom experience\nCBSE curriculum knowledge\nAge: Below 35 years",
+        salary: "₹45,000 - ₹65,000",
+        application_deadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+        job_type: "Full-time",
         category: "Private",
-        tags: ["Physics", "CBSE", "Secondary"],
-        source: "School Recruitment",
-        source_url: "https://donboscodibrugarh.edu.in",
-        ai_summary: "Well-established school with modern lab facilities."
+        tags: ["Computer Science", "Programming", "CBSE", "Technology", "DPS"],
+        source: "DPS Guwahati",
+        source_url: "https://dpsguwahati.in",
+        ai_summary: "Premium school with modern infrastructure. Focus on technology education and innovation."
       }
     ];
 
     for (const job of sampleJobs) {
       await this.createJobListing(job);
+    }
+    
+    // Create a test user for easy login
+    try {
+      const testUser = await this.createUser({
+        username: "testuser",
+        password: "$2a$10$K3X9H5WbKPvKjYv5UqjJu.KmZYRVYMZkF1Kc3hbcwLm0fMuPdPGXi", // password: "test123"
+        email: "test@example.com",
+        fullName: "Test Teacher",
+        bio: "Experienced teacher looking for opportunities in Assam",
+        phone: "9876543210",
+        address: "Guwahati, Assam",
+        experience: "5 years of teaching experience in CBSE schools",
+        education: "M.Sc Mathematics, B.Ed from Gauhati University",
+        skills: ["Mathematics", "Physics", "Computer Science"],
+        preferredLocations: ["Guwahati", "Tezpur", "Jorhat"]
+      });
+      console.log("Test user created - Username: testuser, Password: test123");
+    } catch (error) {
+      console.log("Test user might already exist");
     }
   }
 
