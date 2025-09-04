@@ -7,9 +7,22 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { storage } from "../storage";
 import { MemoryStore, PostgresMemoryStore } from "./memory-store-postgres";
+import { 
+  storeMemoryWithEmbedding, 
+  storeResumeAnalysisEmbedding,
+  storeConversationEmbedding,
+  getRelevantContext 
+} from "../services/weaviate-service";
+import { 
+  getTracedOpenAI, 
+  traceConversation, 
+  logAgentMetrics,
+  traceMemoryOperation,
+  traceable 
+} from "../services/langsmith-observability";
 
-// Initialize AI clients with latest models
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize AI clients with latest models and tracing
+const openai = getTracedOpenAI();
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 const langchainOpenAI = new ChatOpenAI({ 
   model: "gpt-4o",
@@ -336,6 +349,16 @@ Provide data-driven recommendations for:
           matchedPositions: analysisData.matchedPositions
         }
       });
+      
+      // Store embeddings in Weaviate for semantic search
+      await storeResumeAnalysisEmbedding(
+        state.userId,
+        userQuery,
+        analysisData
+      );
+      
+      // Trace memory operation
+      await traceMemoryOperation("resume_analysis_save", state.userId, analysisData, true);
     }
     
     return {

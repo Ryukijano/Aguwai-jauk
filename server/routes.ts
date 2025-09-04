@@ -10,6 +10,10 @@ import type { Express, Request, Response } from "express";
 import type { IStorage } from "./storage";
 import type { User } from "@shared/schema";
 import { insertUserSchema, insertJobListingSchema, insertApplicationSchema, insertChatMessageSchema } from "@shared/schema";
+import rateLimitConfigs, { trackApiUsage, getRateLimitStatus } from "./middleware/rate-limiter";
+import { initializeLangSmith } from "./services/langsmith-observability";
+import { initializeWeaviate } from "./services/weaviate-service";
+import vectorSearchRoutes from "./routes/vector-search";
 
 // Initialize AI clients
 const openai = new OpenAI({
@@ -25,8 +29,15 @@ declare module "express-serve-static-core" {
   }
 }
 
-export function setupRoutes(app: Express, storage: IStorage) {
+export async function setupRoutes(app: Express, storage: IStorage) {
   const router = Router();
+  
+  // Initialize advanced services
+  await initializeWeaviate();
+  await initializeLangSmith();
+  
+  // Apply global API tracking
+  app.use(trackApiUsage);
 
   // Configure Passport
   passport.use(
@@ -72,7 +83,7 @@ export function setupRoutes(app: Express, storage: IStorage) {
   };
 
   // Auth routes
-  router.post("/api/register", async (req, res) => {
+  router.post("/api/register", rateLimitConfigs.auth, async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body);
       const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -87,7 +98,7 @@ export function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  router.post("/api/login", passport.authenticate("local"), (req, res) => {
+  router.post("/api/login", rateLimitConfigs.auth, passport.authenticate("local"), (req, res) => {
     res.json({ 
       id: req.user!.id, 
       username: req.user!.username,
@@ -209,7 +220,7 @@ export function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  router.post("/api/chat/message", async (req, res) => {
+  router.post("/api/chat/message", rateLimitConfigs.aiAgent, async (req, res) => {
     try {
       const { content } = req.body;
       const userId = req.user?.id || null;
@@ -350,4 +361,5 @@ export function setupRoutes(app: Express, storage: IStorage) {
   });
 
   app.use(router);
+  app.use(vectorSearchRoutes); // Vector search routes
 }
