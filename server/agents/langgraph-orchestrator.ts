@@ -1,4 +1,4 @@
-import { StateGraph, MemorySaver, Annotation } from "@langchain/langgraph";
+import { StateGraph, MemorySaver, Annotation, END } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { z } from "zod";
 import { storage } from "../storage";
-import { MemoryStore } from "./memory-store";
+import { MemoryStore, PostgresMemoryStore } from "./memory-store-postgres";
 
 // Initialize AI clients with latest models
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -55,6 +55,10 @@ const AgentStateAnnotation = Annotation.Root({
   memory: Annotation<Record<string, any>>({
     reducer: (x, y) => ({ ...x, ...y }),
     default: () => ({}),
+  }),
+  threadId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => "",
   }),
 });
 
@@ -323,7 +327,7 @@ Provide data-driven recommendations for:
     
     // Save enhanced analysis to memory
     if (state.userId) {
-      await MemoryStore.saveResumeAnalysis(state.userId, {
+      await PostgresMemoryStore.saveResumeAnalysis(state.userId, {
         score: analysisData.overallScore || 0,
         fullAnalysis: JSON.stringify(taskResult),
         timestamp: new Date(),
@@ -604,11 +608,9 @@ ${JSON.stringify(filteredJobs.slice(0, 15).map(job => ({
     
     // Save search history
     if (userId) {
-      await MemoryStore.saveSearchHistory(userId, {
-        query: searchParams,
-        results: filteredJobs.map(j => j.id),
-        timestamp: new Date()
-      });
+      await PostgresMemoryStore.saveSearchHistory(userId, searchParams, filteredJobs.slice(0, 10));
+      // Save task result
+      await PostgresMemoryStore.saveTaskResult(userId, state.threadId, taskResult);
     }
     
     return {
@@ -769,14 +771,32 @@ async function interviewPrepAgent(state: typeof AgentStateAnnotation.State) {
     
     // Save interview prep to memory
     if (userId) {
-      await MemoryStore.updateUserProfile(userId, {
-        lastInterviewPrep: {
+      const profile = await PostgresMemoryStore.getUserProfile(userId) || {
+        userId,
+        preferences: {},
+        resumeAnalyses: [],
+        searchHistory: [],
+        interviewHistory: []
+      };
+      
+      profile.interviewHistory.push({
+        timestamp: new Date(),
+        prep: {
           position: jobTitle,
           school: school,
-          preparedAt: new Date(),
           keyPoints: taskResult.metadata?.insights
         }
       });
+      
+      // Keep only last 10 interview preps
+      if (profile.interviewHistory.length > 10) {
+        profile.interviewHistory = profile.interviewHistory.slice(-10);
+      }
+      
+      await PostgresMemoryStore.saveUserProfile(userId, profile);
+      
+      // Save task result
+      await PostgresMemoryStore.saveTaskResult(userId, state.threadId, taskResult);
     }
     
     return {
@@ -957,7 +977,7 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
   
   try {
     // Get user context for personalized responses
-    const userContext = userId ? await MemoryStore.getUserContext(userId) : null;
+    const userContext = userId ? await PostgresMemoryStore.getUserContext(userId) : null;
     
     // ADK-style conversational agent with context awareness
     const response = await openai.chat.completions.create({
@@ -987,7 +1007,7 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
         },
         {
           role: "user",
-          content: lastUserMessage?.content || ""
+          content: (lastUserMessage?.content || "").toString()
         }
       ],
       temperature: 0.8,
@@ -997,7 +1017,7 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
     const responseContent = response.choices[0].message.content || "";
     
     // Analyze conversation topic for insights
-    const topicAnalysis = analyzeConversationTopic(lastUserMessage?.content || "");
+    const topicAnalysis = analyzeConversationTopic((lastUserMessage?.content || "").toString());
     
     // Create ADK-style task result
     const taskResult: TaskResult = {
@@ -1018,7 +1038,7 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
     
     // Update conversation history
     if (userId) {
-      await MemoryStore.saveThreadMemory(
+      await PostgresMemoryStore.saveThreadMemory(
         state.threadId || "default",
         userId,
         messages,
@@ -1046,7 +1066,7 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
     const fallbackResult: TaskResult = {
       agentName: "Career Advisor",
       task: "General Guidance",
-      result: generateFallbackConversationalResponse(lastUserMessage?.content || ""),
+      result: generateFallbackConversationalResponse((lastUserMessage?.content || "").toString()),
       confidence: 0.65,
       metadata: {
         insights: ["Providing general guidance"],
@@ -1185,11 +1205,11 @@ export function createMultiAgentGraph() {
   workflow.addNode(nodeNames.chat, conversationalAgent);
   
   // Define the flow - start with supervisor
-  workflow.addEdge("__start__", nodeNames.supervisor);
+  workflow.setEntryPoint(nodeNames.supervisor as any);
   
   // Add conditional edges based on supervisor decision
   workflow.addConditionalEdges(
-    nodeNames.supervisor,
+    nodeNames.supervisor as any,
     async (state) => {
       const agent = state.currentAgent || "conversationalist";
       // Map agent names to node names
@@ -1204,10 +1224,10 @@ export function createMultiAgentGraph() {
   );
   
   // All agents return to END
-  workflow.addEdge(nodeNames.resume, "__end__");
-  workflow.addEdge(nodeNames.search, "__end__");
-  workflow.addEdge(nodeNames.interview, "__end__");
-  workflow.addEdge(nodeNames.chat, "__end__");
+  workflow.addEdge(nodeNames.resume as any, END);
+  workflow.addEdge(nodeNames.search as any, END);
+  workflow.addEdge(nodeNames.interview as any, END);
+  workflow.addEdge(nodeNames.chat as any, END);
   
   // Add memory persistence
   const checkpointer = new MemorySaver();
