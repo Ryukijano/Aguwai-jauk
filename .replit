@@ -7,7 +7,7 @@ channel = "stable-24_05"
 
 [deployment]
 deploymentTarget = "cloudrun"
-run = ["sh", "-c", "npm run dev"]
+run = ["sh", "-c", "npm run build && npm run start"]
 
 [workflows]
 runButton = "Project"
@@ -43,10 +43,6 @@ externalPort = 80
 [[ports]]
 localPort = 37091
 externalPort = 3000
-
-[[ports]]
-localPort = 46177
-externalPort = 3001
 
 [agent]
 integrations = ["javascript_gemini==1.0.0", "javascript_openai==1.0.0"]
