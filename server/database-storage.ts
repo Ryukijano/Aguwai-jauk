@@ -277,6 +277,17 @@ export class DatabaseStorage implements IStorage {
     return result.rows;
   }
 
+  // Alias for scraper compatibility
+  async getJobs(): Promise<JobListing[]> {
+    return this.getAllJobs();
+  }
+
+  // Get job by external ID for duplicate checking
+  async getJobByExternalId(externalId: string): Promise<JobListing | null> {
+    const result = await this.pool.query('SELECT * FROM job_listings WHERE external_id = $1', [externalId]);
+    return result.rows[0] || null;
+  }
+
   async getJobListings(filters?: { category?: string; location?: string; search?: string }): Promise<JobListing[]> {
     let query = 'SELECT * FROM job_listings WHERE 1=1';
     const values = [];
@@ -306,14 +317,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJobListing(jobListing: InsertJobListing): Promise<JobListing> {
-    const { title, organization, location, description, requirements, salary, applicationDeadline, jobType, category, tags, source, sourceUrl, aiSummary } = jobListing;
+    const { title, organization, location, description, requirements, salary, applicationDeadline, jobType, category, tags, source, sourceUrl, aiSummary, externalId, isActive, applicationLink } = jobListing;
     const result = await this.pool.query(
-      `INSERT INTO job_listings (title, organization, location, description, requirements, salary, application_deadline, job_type, category, tags, source, source_url, ai_summary) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+      `INSERT INTO job_listings (title, organization, location, description, requirements, salary, application_deadline, job_type, category, tags, source, source_url, ai_summary, external_id, is_active, application_link) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
        RETURNING *`,
-      [title, organization, location, description, requirements, salary, applicationDeadline, jobType, category, tags, source, sourceUrl, aiSummary]
+      [title, organization, location, description, requirements, salary, applicationDeadline, jobType, category, tags, source, sourceUrl, aiSummary, externalId, isActive !== false, applicationLink]
     );
     return result.rows[0];
+  }
+
+  // Alias for scraper compatibility
+  async createJob(job: InsertJobListing): Promise<JobListing> {
+    return this.createJobListing(job);
   }
 
   async updateJobListing(id: number, updates: Partial<InsertJobListing>): Promise<JobListing | null> {

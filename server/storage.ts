@@ -27,8 +27,11 @@ export interface IStorage {
   // Job listing methods
   getJobListings(filters?: { category?: string; location?: string; search?: string }): Promise<JobListing[]>;
   getJobListing(id: number): Promise<JobListing | null>;
+  getJobs(): Promise<JobListing[]>; // Alias for scraper compatibility
   createJobListing(job: InsertJobListing): Promise<JobListing>;
+  createJob(job: InsertJobListing): Promise<JobListing>; // Alias for scraper compatibility
   updateJobListing(id: number, updates: Partial<InsertJobListing>): Promise<JobListing | null>;
+  getJobByExternalId(externalId: string): Promise<JobListing | null>;
   
   // Application methods
   getApplications(userId: number): Promise<Application[]>;

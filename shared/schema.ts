@@ -43,6 +43,9 @@ export const jobListings = pgTable('job_listings', {
   source: text('source'),
   sourceUrl: text('source_url'),
   aiSummary: text('ai_summary'),
+  externalId: text('external_id').unique(), // For tracking scraped jobs
+  isActive: boolean('is_active').default(true), // For job status
+  applicationLink: text('application_link'), // Direct application link
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 });

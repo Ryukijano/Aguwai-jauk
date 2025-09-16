@@ -14,6 +14,7 @@ import rateLimitConfigs, { trackApiUsage, getRateLimitStatus } from "./middlewar
 import { initializeLangSmith } from "./services/langsmith-observability";
 import { initializeWeaviate } from "./services/weaviate-service";
 import vectorSearchRoutes from "./routes/vector-search";
+import { JobScraperService } from "./services/job-scraper";
 
 // Initialize AI clients
 const openai = new OpenAI({
@@ -35,6 +36,11 @@ export async function setupRoutes(app: Express, storage: IStorage) {
   // Initialize advanced services
   await initializeWeaviate();
   await initializeLangSmith();
+  
+  // Initialize job scraper service
+  const jobScraper = new JobScraperService(storage);
+  // Schedule automatic job scraping every hour
+  jobScraper.scheduleScrapingInterval(60);
   
   // Apply global API tracking
   app.use(trackApiUsage);
@@ -151,6 +157,26 @@ export async function setupRoutes(app: Express, storage: IStorage) {
       res.json(job);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual job scraping endpoint
+  router.post("/api/jobs/scrape", rateLimitConfigs.api, async (req, res) => {
+    try {
+      console.log('🔄 Starting manual job scrape...');
+      await jobScraper.scrapeAllJobs();
+      const jobs = await storage.getJobListings({});
+      res.json({ 
+        success: true, 
+        message: 'Job scraping completed successfully',
+        totalJobs: jobs.length
+      });
+    } catch (error: any) {
+      console.error('Error scraping jobs:', error);
+      res.status(500).json({ 
+        error: 'Failed to scrape jobs', 
+        message: error.message 
+      });
     }
   });
 
