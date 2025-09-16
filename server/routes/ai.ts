@@ -128,13 +128,13 @@ router.post("/chat", async (req, res) => {
     // Store the messages in the database if a user is authenticated
     if (req.session?.userId) {
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: message,
         isFromUser: true,
       });
 
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: content,
         isFromUser: false,
       });
@@ -335,7 +335,7 @@ router.get("/chat-history", async (req, res) => {
   try {
     // If user is authenticated, get history from database
     if (req.session?.userId) {
-      const messages = await storage.getUserChatMessages(req.session.userId);
+      const messages = await storage.getChatMessages((req.session as any)?.userId || null);
       return res.json(messages);
     }
     
@@ -427,13 +427,13 @@ router.post("/advanced-chat", async (req, res) => {
     // Store the messages in the database if a user is authenticated
     if (req.session?.userId) {
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: message,
         isFromUser: true,
       });
 
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: latestMessage.content || "",
         isFromUser: false,
       });
@@ -541,7 +541,7 @@ router.post("/agent-chat", async (req, res) => {
 
     // Import the new multi-agent system
     const { processMultiAgentChat } = await import("../agents/langgraph-orchestrator");
-    const { MemoryStore } = await import("../agents/memory-store");
+    const { MemoryStore } = await import("../agents/memory-store-postgres");
     
     // Get user context for enhanced responses
     const userContext = await MemoryStore.getUserContext(userId || "anonymous");

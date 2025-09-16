@@ -68,13 +68,13 @@ router.post("/chat", async (req, res) => {
     // Store in database if user is authenticated
     if (req.session?.userId) {
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: message,
         isFromUser: true,
       });
 
       await storage.createChatMessage({
-        userId: req.session.userId,
+        userId: (req.session as any)?.userId,
         content: response,
         isFromUser: false,
       });
@@ -241,7 +241,7 @@ router.get("/chat-history", async (req, res) => {
   try {
     // If user is authenticated, get history from database
     if (req.session?.userId) {
-      const messages = await storage.getUserChatMessages(req.session.userId);
+      const messages = await storage.getChatMessages((req.session as any)?.userId || null);
       return res.json(messages);
     }
     

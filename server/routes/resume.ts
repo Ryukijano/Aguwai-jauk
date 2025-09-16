@@ -11,7 +11,7 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 import { processMultiAgentChat } from "../agents/langgraph-orchestrator";
-import { MemoryStore } from "../agents/memory-store";
+import { MemoryStore } from "../agents/memory-store-postgres";
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -46,7 +46,7 @@ router.post("/analyze", requireAuth, upload.single('resume'), async (req, res) =
       return res.status(400).json({ error: "Resume file is required" });
     }
 
-    const userId = req.session?.userId;
+    const userId = (req.session as any)?.userId;
     
     // Read the file content
     const resumeContent = fs.readFileSync(req.file.path, 'utf-8');
@@ -98,7 +98,7 @@ router.post("/analyze", requireAuth, upload.single('resume'), async (req, res) =
 // Get analysis history
 router.get("/history", requireAuth, async (req, res) => {
   try {
-    const userId = req.session?.userId;
+    const userId = (req.session as any)?.userId;
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
