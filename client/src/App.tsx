@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react';
 
 // Pages
+import Landing from '@/pages/Landing';
 import { Login } from '@/pages/Login';
+import Register from '@/pages/auth/Register';
 import { Dashboard } from '@/pages/Dashboard';
 import { Jobs } from '@/pages/Jobs';
 import { JobDetails } from '@/pages/JobDetails';
@@ -191,20 +193,22 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Switch>
+          <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
+          <Route path="/register" component={Register} />
           <Route path="/dashboard">
             <Layout>
               <Dashboard />
             </Layout>
           </Route>
-          <Route path="/jobs">
-            <Layout>
-              <Jobs />
-            </Layout>
-          </Route>
           <Route path="/jobs/:id">
             <Layout>
               <JobDetails />
+            </Layout>
+          </Route>
+          <Route path="/jobs">
+            <Layout>
+              <Jobs />
             </Layout>
           </Route>
           <Route path="/applications">
@@ -218,8 +222,8 @@ const App = () => {
             </Layout>
           </Route>
           <Route>
-            {/* Default redirect to login */}
-            <Login />
+            {/* Default redirect to landing */}
+            <Landing />
           </Route>
         </Switch>
       </Router>

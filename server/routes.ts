@@ -104,12 +104,30 @@ export async function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  router.post("/api/login", rateLimitConfigs.auth, passport.authenticate("local"), (req, res) => {
-    res.json({ 
-      id: req.user!.id, 
-      username: req.user!.username,
-      fullName: req.user!.fullName
-    });
+  router.post("/api/login", rateLimitConfigs.auth, (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) {
+        console.error("Login error:", err);
+        return res.status(500).json({ error: "Login failed", message: err.message });
+      }
+      if (!user) {
+        return res.status(401).json({ 
+          error: "Invalid credentials", 
+          message: info?.message || "Invalid username or password" 
+        });
+      }
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Session error:", err);
+          return res.status(500).json({ error: "Login failed", message: "Session initialization failed" });
+        }
+        return res.json({ 
+          id: user.id, 
+          username: user.username,
+          fullName: user.fullName
+        });
+      });
+    })(req, res, next);
   });
 
   router.post("/api/logout", (req, res) => {

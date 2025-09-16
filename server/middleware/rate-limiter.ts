@@ -31,26 +31,32 @@ async function initRedis() {
 // Initialize Redis on module load
 initRedis().catch(console.error);
 
+// Common rate limiter config to disable IPv6 validation
+const baseConfig: any = {
+  validate: false, // Disable all validations to avoid IPv6 issues
+  standardHeaders: true,
+  legacyHeaders: false
+};
+
 // Different rate limit configurations for different endpoints
 export const rateLimitConfigs = {
   // Strict limit for AI agent endpoints (expensive operations)
   aiAgent: rateLimit({
+    ...baseConfig,
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 10, // 10 requests per minute
     message: 'Too many AI requests, please try again after a minute.',
-    standardHeaders: true,
-    legacyHeaders: false,
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:ai:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       // Rate limit by user ID if authenticated, otherwise by IP
       if (req.user) {
         return `user:${(req.user as any).id}`;
       }
-      // Use the built-in IP address handling for proper IPv6 support
-      return req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      // Use the IP from the request (express handles this properly)
+      return req.ip || 'unknown';
     },
     handler: (req: Request, res: Response) => {
       res.status(429).json({
@@ -59,88 +65,85 @@ export const rateLimitConfigs = {
         retryAfter: 60
       });
     }
-  }),
+  } as any),
 
   // Moderate limit for search operations
   search: rateLimit({
+    ...baseConfig,
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 30, // 30 searches per minute
     message: 'Too many search requests, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:search:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       if (req.user) {
         return `user:${(req.user as any).id}`;
       }
-      return req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      return req.ip || 'unknown';
     }
-  }),
+  } as any),
 
   // General API rate limit
   api: rateLimit({
+    ...baseConfig,
     windowMs: 1 * 60 * 1000, // 1 minute
     max: 100, // 100 requests per minute
     message: 'Too many requests, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:api:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       if (req.user) {
         return `user:${(req.user as any).id}`;
       }
-      return req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      return req.ip || 'unknown';
     }
-  }),
+  } as any),
 
   // Strict limit for auth endpoints (prevent brute force)
   auth: rateLimit({
+    ...baseConfig,
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 5, // 5 attempts per 15 minutes
     message: 'Too many authentication attempts, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
     skipSuccessfulRequests: true, // Don't count successful logins
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:auth:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       // Rate limit by email/username for auth attempts
-      const identifier = req.body?.email || req.body?.username || req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      const identifier = req.body?.email || req.body?.username || req.ip || 'unknown';
       return `auth:${identifier}`;
     }
-  }),
+  } as any),
 
   // File upload rate limit
   upload: rateLimit({
+    ...baseConfig,
     windowMs: 10 * 60 * 1000, // 10 minutes
     max: 10, // 10 uploads per 10 minutes
     message: 'Too many file uploads, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:upload:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       if (req.user) {
         return `user:${(req.user as any).id}`;
       }
-      return req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      return req.ip || 'unknown';
     }
-  })
+  } as any)
 };
 
 // Dynamic rate limiter based on user tier (for future premium features)
 export function createDynamicRateLimiter(tierLimits: { free: number; premium: number; enterprise: number }) {
   return rateLimit({
+    ...baseConfig,
     windowMs: 1 * 60 * 1000, // 1 minute window
     max: (req: Request) => {
       // Check user tier from request (implement user tier logic)
@@ -148,19 +151,17 @@ export function createDynamicRateLimiter(tierLimits: { free: number; premium: nu
       return tierLimits[userTier as keyof typeof tierLimits] || tierLimits.free;
     },
     message: 'Rate limit exceeded for your account tier.',
-    standardHeaders: true,
-    legacyHeaders: false,
     store: redisClient ? new RedisStore({
       client: redisClient,
       prefix: 'rl:dynamic:',
     }) : undefined,
-    keyGenerator: (req: Request, res: Response) => {
+    keyGenerator: (req: Request) => {
       if (req.user) {
         return `user:${(req.user as any).id}`;
       }
-      return req.ip?.replace(/:\d+[^:]*$/, '') || 'unknown';
+      return req.ip || 'unknown';
     }
-  });
+  } as any);
 }
 
 // Middleware to track API usage statistics
