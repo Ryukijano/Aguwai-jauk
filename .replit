@@ -41,12 +41,12 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 37091
-externalPort = 3000
+localPort = 35865
+externalPort = 3001
 
 [[ports]]
-localPort = 44517
-externalPort = 3001
+localPort = 37091
+externalPort = 3000
 
 [agent]
 integrations = ["javascript_gemini==1.0.0", "javascript_openai==1.0.0"]
