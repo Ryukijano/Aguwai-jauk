@@ -196,24 +196,26 @@ export class DatabaseStorage implements IStorage {
       await this.createJobListing(job);
     }
     
-    // Create a test user for easy login
-    try {
-      const testUser = await this.createUser({
-        username: "testuser",
-        password: "$2a$10$K3X9H5WbKPvKjYv5UqjJu.KmZYRVYMZkF1Kc3hbcwLm0fMuPdPGXi", // password: "test123"
-        email: "test@example.com",
-        fullName: "Test Teacher",
-        bio: "Experienced teacher looking for opportunities in Assam",
-        phone: "9876543210",
-        address: "Guwahati, Assam",
-        experience: "5 years of teaching experience in CBSE schools",
-        education: "M.Sc Mathematics, B.Ed from Gauhati University",
-        skills: ["Mathematics", "Physics", "Computer Science"],
-        preferredLocations: ["Guwahati", "Tezpur", "Jorhat"]
-      });
-      console.log("Test user created - Username: testuser, Password: test123");
-    } catch (error) {
-      console.log("Test user might already exist");
+    // Create a test user for easy login (development only)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const testUser = await this.createUser({
+          username: process.env.TEST_USERNAME || "testuser",
+          password: process.env.TEST_PASSWORD_HASH || "$2a$10$K3X9H5WbKPvKjYv5UqjJu.KmZYRVYMZkF1Kc3hbcwLm0fMuPdPGXi", // default: "test123"
+          email: "test@example.com",
+          fullName: "Test Teacher",
+          bio: "Experienced teacher looking for opportunities in Assam",
+          phone: "9876543210",
+          address: "Guwahati, Assam",
+          experience: "5 years of teaching experience in CBSE schools",
+          education: "M.Sc Mathematics, B.Ed from Gauhati University",
+          skills: ["Mathematics", "Physics", "Computer Science"],
+          preferredLocations: ["Guwahati", "Tezpur", "Jorhat"]
+        });
+        console.log("Test user created for development environment");
+      } catch (error) {
+        console.log("Test user might already exist");
+      }
     }
   }
 
