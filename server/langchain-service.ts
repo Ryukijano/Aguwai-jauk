@@ -258,8 +258,8 @@ If you need to generate interview questions, use the generate_interview_question
 When you have a final answer to provide to the user, use the final_answer tool.`;
     
     const promptTemplate = ChatPromptTemplate.fromMessages([
-      { role: "system", content: systemPrompt },
-      { role: "human", content: (input) => this.formatMessagesForPrompt(input.messages) },
+      ["system", systemPrompt],
+      ["human", "{messages}"]
     ]);
 
     const agentNode = RunnableSequence.from([

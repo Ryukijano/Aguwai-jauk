@@ -14,6 +14,9 @@ import rateLimitConfigs, { trackApiUsage, getRateLimitStatus } from "./middlewar
 import { initializeLangSmith } from "./services/langsmith-observability";
 import { initializeWeaviate } from "./services/weaviate-service";
 import vectorSearchRoutes from "./routes/vector-search";
+import aiRoutes from "./routes/ai";
+// import langchainRoutes from "./routes/langchain"; // temporarily disabled
+import resumeRoutes from "./routes/resume";
 import { JobScraperService } from "./services/job-scraper";
 
 // Initialize AI clients
@@ -405,5 +408,8 @@ export async function setupRoutes(app: Express, storage: IStorage) {
   });
 
   app.use(router);
+  app.use("/api/ai", aiRoutes); // AI routes
+  // app.use("/api/langchain", langchainRoutes); // LangChain routes - temporarily disabled due to errors
+  app.use("/api/resume", resumeRoutes); // Resume routes
   app.use(vectorSearchRoutes); // Vector search routes
 }

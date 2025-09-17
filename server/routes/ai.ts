@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from 'url';
+import type { Request, Response } from "express";
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -126,15 +127,15 @@ router.post("/chat", async (req, res) => {
     }
 
     // Store the messages in the database if a user is authenticated
-    if (req.session?.userId) {
+    if ((req as any).user?.id) {
       await storage.createChatMessage({
-        userId: (req.session as any)?.userId,
+        userId: (req as any).user?.id,
         content: message,
         isFromUser: true,
       });
 
       await storage.createChatMessage({
-        userId: (req.session as any)?.userId,
+        userId: (req as any).user?.id,
         content: content,
         isFromUser: false,
       });
@@ -334,8 +335,8 @@ router.post("/analyze-document", upload.single('document'), async (req, res) => 
 router.get("/chat-history", async (req, res) => {
   try {
     // If user is authenticated, get history from database
-    if (req.session?.userId) {
-      const messages = await storage.getChatMessages((req.session as any)?.userId || null);
+    if ((req as any).user?.id) {
+      const messages = await storage.getChatMessages((req as any).user?.id || null);
       return res.json(messages);
     }
     
@@ -388,7 +389,7 @@ router.delete("/chat-history", async (req, res) => {
     threadsBySession[sessionId] = thread.id;
     
     // If user is authenticated, clear from database too
-    if (req.session?.userId) {
+    if ((req as any).user?.id) {
       // This is just a placeholder as we don't have a method to delete all messages
       // You would implement a proper method in storage.ts to delete all messages for a user
     }
@@ -425,15 +426,15 @@ router.post("/advanced-chat", async (req, res) => {
     threadsBySession[sessionId] = result.threadId;
     
     // Store the messages in the database if a user is authenticated
-    if (req.session?.userId) {
+    if ((req as any).user?.id) {
       await storage.createChatMessage({
-        userId: (req.session as any)?.userId,
+        userId: (req as any).user?.id,
         content: message,
         isFromUser: true,
       });
 
       await storage.createChatMessage({
-        userId: (req.session as any)?.userId,
+        userId: (req as any).user?.id,
         content: latestMessage.content || "",
         isFromUser: false,
       });
@@ -531,7 +532,7 @@ router.post("/agent-chat", async (req, res) => {
   try {
     const { message, threadId } = req.body;
     const sessionId = req.session.id || 'anonymous';
-    const userId = req.session?.userId;
+    const userId = (req as any).user?.id;
 
     console.log("Agent chat received:", message, "User ID:", userId);
 
