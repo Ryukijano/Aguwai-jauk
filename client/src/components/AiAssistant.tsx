@@ -75,6 +75,7 @@ export const AiAssistant: React.FC = () => {
               onClick={() => setIsOpen(true)}
               size="lg"
               className="rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow"
+              data-testid="button-ai-assistant"
             >
               <MessageSquare className="h-6 w-6" />
             </Button>
@@ -127,7 +128,7 @@ export const AiAssistant: React.FC = () => {
               {/* Messages */}
               {!isMinimized && (
                 <>
-                  <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                  <ScrollArea className="flex-1 p-4" ref={scrollRef} data-testid="ai-chat-messages">
                     <div className="space-y-4">
                       {messages.length === 0 && (
                         <div className="text-center text-muted-foreground py-8">
@@ -182,11 +183,13 @@ export const AiAssistant: React.FC = () => {
                         placeholder="Ask me anything..."
                         disabled={sendMessage.isPending}
                         className="flex-1"
+                        data-testid="ai-chat-input"
                       />
                       <Button
                         type="submit"
                         size="icon"
                         disabled={!input.trim() || sendMessage.isPending}
+                        data-testid="ai-chat-send"
                       >
                         <Send className="h-4 w-4" />
                       </Button>
