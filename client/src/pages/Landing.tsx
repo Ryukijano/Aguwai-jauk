@@ -271,7 +271,7 @@ export default function Landing() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle>Assistant Teacher - Lower Primary</CardTitle>
-                    <CardDescription className="mt-2">
+                    <div className="mt-2 text-sm text-muted-foreground">
                       <div className="flex items-center gap-4 text-sm">
                         <span className="flex items-center gap-1">
                           <BriefcaseIcon className="h-4 w-4" />
@@ -282,7 +282,7 @@ export default function Landing() {
                           Various Districts
                         </span>
                       </div>
-                    </CardDescription>
+                    </div>
                   </div>
                   <Badge variant="secondary">2900 Posts</Badge>
                 </div>
@@ -309,7 +309,7 @@ export default function Landing() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle>Post Graduate Teacher (PGT)</CardTitle>
-                    <CardDescription className="mt-2">
+                    <div className="mt-2 text-sm text-muted-foreground">
                       <div className="flex items-center gap-4 text-sm">
                         <span className="flex items-center gap-1">
                           <BriefcaseIcon className="h-4 w-4" />
@@ -320,7 +320,7 @@ export default function Landing() {
                           All Districts
                         </span>
                       </div>
-                    </CardDescription>
+                    </div>
                   </div>
                   <Badge variant="secondary">1385 Posts</Badge>
                 </div>
