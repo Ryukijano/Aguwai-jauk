@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Router, Route, Switch, Link, useLocation } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
 import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react';
@@ -18,15 +19,7 @@ import { Profile } from '@/pages/Profile';
 // Components
 import { AiAssistant } from '@/components/AiAssistant';
 
-// Create query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      retry: 1,
-    },
-  },
-});
+// Using the configured query client from lib/queryClient.ts which has default queryFn
 
 // Main Layout Component
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,16 +50,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link href="/dashboard">
-                <a className="flex items-center space-x-2">
-                  <Briefcase className="h-8 w-8 text-blue-600" />
-                  <h1 className="text-xl font-bold text-gray-900 hidden sm:block">
-                    Teacher Job Portal - Assam
-                  </h1>
-                  <h1 className="text-xl font-bold text-gray-900 sm:hidden">
-                    TJP Assam
-                  </h1>
-                </a>
+              <Link href="/dashboard" className="flex items-center space-x-2">
+                <Briefcase className="h-8 w-8 text-blue-600" />
+                <h1 className="text-xl font-bold text-gray-900 hidden sm:block">
+                  Teacher Job Portal - Assam
+                </h1>
+                <h1 className="text-xl font-bold text-gray-900 sm:hidden">
+                  TJP Assam
+                </h1>
               </Link>
             </div>
 
