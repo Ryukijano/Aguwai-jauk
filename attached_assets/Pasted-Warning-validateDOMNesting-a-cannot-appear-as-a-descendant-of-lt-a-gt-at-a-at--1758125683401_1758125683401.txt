@@ -1,0 +1,19 @@
+Warning: validateDOMNesting(...): <a> cannot appear as a descendant of &lt;a&gt;.
+    at a
+    at a
+    at https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=357b1619:220:18
+    at div
+    at div
+    at div
+    at header
+    at div
+    at Layout (https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/src/App.tsx?v=S7PW4tIcSKD0BbNj4kMJB:42:19)
+    at Route (https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=357b1619:206:16)
+    at Switch (https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=357b1619:262:17)
+    at Router (https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=357b1619:161:17)
+    at QueryClientProvider (https://65882623-bfc9-489e-a037-3b61a5282d4c-00-2xxz7vktvfl4a.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=357b1619:2934:3)
+    at App
+[["/api/me"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function
+[["/api/applications"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function
+[["/api/jobs"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function
+[["/api/ai/chat-history"]]: No queryFn was passed as an option, and no default queryFn was found. The queryFn parameter is only optional when using a default queryFn. More info here: https://tanstack.com/query/latest/docs/framework/react/guides/default-query-function
