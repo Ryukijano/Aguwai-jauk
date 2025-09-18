@@ -113,7 +113,7 @@ function extractSkills(text: string): string[] {
     text.toLowerCase().includes(skill)
   );
   
-  return [...new Set(foundSkills)];
+  return Array.from(new Set(foundSkills));
 }
 
 // Basic experience extraction
