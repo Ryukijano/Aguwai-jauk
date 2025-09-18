@@ -46,35 +46,116 @@ export async function setupRoutes(app: Express, storage: IStorage) {
   const jobScraper = new JobScraperService(storage);
   const aiJobScraper = new AIJobScraperService(storage);
   
-  // Schedule automatic job scraping every hour for both scrapers
-  const scheduleAllScrapers = async () => {
-    console.log('⏰ Running scheduled job scraping (RSS + AI)...');
+  // Cache-aware scheduling configuration
+  const SCRAPING_SCHEDULE = {
+    RSS_FEEDS_INTERVAL: 6 * 60 * 60 * 1000,     // 6 hours for RSS feeds
+    CURATED_SOURCES_INTERVAL: 12 * 60 * 60 * 1000, // 12 hours for curated sources
+    STARTUP_DELAY: 5 * 1000                      // 5 seconds delay on startup
+  };
+  
+  let lastRssScrapeTime = 0;
+  let lastCuratedScrapeTime = 0;
+  
+  // Cache-aware job scraping with TTL-based refresh
+  const scheduleAllScrapers = async (forceRefresh = false) => {
+    console.log('⏰ Running cache-aware scheduled job scraping...');
     const startTime = Date.now();
+    const currentTime = Date.now();
     
     try {
-      // Run both scrapers in parallel
-      const [rssJobs, aiJobs] = await Promise.all([
-        jobScraper.scrapeAllJobs().catch(err => {
-          console.error('RSS scraper error:', err);
-          return [];
-        }),
-        aiJobScraper.scrapeJobsWithAI().catch(err => {
-          console.error('AI scraper error:', err);
-          return [];
-        })
-      ]);
+      const tasks: Promise<any>[] = [];
+      
+      // Check if RSS feed scraping is needed (6-hour TTL)
+      const rssTimeDiff = currentTime - lastRssScrapeTime;
+      if (forceRefresh || rssTimeDiff >= SCRAPING_SCHEDULE.RSS_FEEDS_INTERVAL) {
+        console.log('📡 RSS feed scraping needed (cache expired or forced refresh)');
+        tasks.push(
+          jobScraper.scrapeAllJobs().then(() => {
+            lastRssScrapeTime = currentTime;
+            console.log(`✅ RSS scraping complete`);
+            return [];
+          }).catch(err => {
+            console.error('RSS scraper error:', err);
+            return [];
+          })
+        );
+      } else {
+        console.log(`⏭️ Skipping RSS scraping (cached for ${Math.round((SCRAPING_SCHEDULE.RSS_FEEDS_INTERVAL - rssTimeDiff) / 60000)} more minutes)`);
+      }
+      
+      // Check if curated source scraping is needed (12-hour TTL)
+      const curatedTimeDiff = currentTime - lastCuratedScrapeTime;
+      if (forceRefresh || curatedTimeDiff >= SCRAPING_SCHEDULE.CURATED_SOURCES_INTERVAL) {
+        console.log('🌐 Curated source scraping needed (cache expired or forced refresh)');
+        tasks.push(
+          aiJobScraper.scrapeJobsWithAI().then(jobs => {
+            lastCuratedScrapeTime = currentTime;
+            console.log(`✅ AI-enhanced scraping complete: ${jobs.length} jobs found`);
+            // Log source breakdown
+            const sourceBreakdown = jobs.reduce((acc, job) => {
+              const source = job.source?.split(':')[0] || 'Unknown';
+              acc[source] = (acc[source] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            console.log('📊 Job sources:', sourceBreakdown);
+            return jobs;
+          }).catch(err => {
+            console.error('AI scraper error:', err);
+            // On error, generate AI-synthesized fallback
+            console.log('⚠️ Falling back to AI-synthesized jobs...');
+            return aiJobScraper.scrapeJobsWithAI();
+          })
+        );
+      } else {
+        console.log(`⏭️ Skipping curated source scraping (cached for ${Math.round((SCRAPING_SCHEDULE.CURATED_SOURCES_INTERVAL - curatedTimeDiff) / 60000)} more minutes)`);
+      }
+      
+      // Only run tasks if there are any
+      if (tasks.length > 0) {
+        await Promise.all(tasks);
+      } else {
+        console.log('✅ All content is cached and fresh, no scraping needed');
+      }
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ Scheduled scraping complete in ${totalTime}ms`);
+      console.log(`✅ Scheduled task complete in ${totalTime}ms`);
+      
+      // Log cache statistics
+      const cacheStats = await aiJobScraper.getCacheStats();
+      console.log('📈 Cache statistics:', {
+        memoryEntries: cacheStats.memoryEntries,
+        memoryHits: cacheStats.memoryHits,
+        memoryMisses: cacheStats.memoryMisses,
+        staleServed: cacheStats.staleServed
+      });
+      
     } catch (error) {
       console.error('Error in scheduled scraping:', error);
     }
   };
   
-  // Schedule both scrapers to run every hour
-  setInterval(scheduleAllScrapers, 60 * 60 * 1000);
-  // Run once on startup
-  scheduleAllScrapers();
+  // Schedule intelligent scraping based on different TTLs
+  // RSS feeds every 6 hours
+  setInterval(() => {
+    const currentTime = Date.now();
+    if (currentTime - lastRssScrapeTime >= SCRAPING_SCHEDULE.RSS_FEEDS_INTERVAL) {
+      scheduleAllScrapers();
+    }
+  }, 60 * 60 * 1000); // Check every hour
+  
+  // Curated sources every 12 hours
+  setInterval(() => {
+    const currentTime = Date.now();
+    if (currentTime - lastCuratedScrapeTime >= SCRAPING_SCHEDULE.CURATED_SOURCES_INTERVAL) {
+      scheduleAllScrapers();
+    }
+  }, 60 * 60 * 1000); // Check every hour
+  
+  // Initial scraping after a short delay to let the server start properly
+  setTimeout(() => {
+    console.log('🚀 Starting initial job scraping after startup...');
+    scheduleAllScrapers(true); // Force refresh on startup
+  }, SCRAPING_SCHEDULE.STARTUP_DELAY);
   
   // Apply global API tracking
   app.use(trackApiUsage);
@@ -139,7 +220,7 @@ export async function setupRoutes(app: Express, storage: IStorage) {
   });
 
   router.post("/api/login", rateLimitConfigs.auth, (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         console.error("Login error:", err);
         return res.status(500).json({ error: "Login failed", message: err.message });
@@ -299,18 +380,19 @@ export async function setupRoutes(app: Express, storage: IStorage) {
       // Build custom search query
       const customQuery = `${searchParams.searchQuery} ${searchParams.category || ''} in ${searchParams.location} ${searchParams.keywords.join(' ')}`.trim();
       
-      // Create temporary AI scraper with custom search
-      const customScraper = new AIJobScraperService(storage);
+      // Use the existing AI scraper with cache
+      // The scraper now uses curated sources only, no Google search
+      const searchResults = await aiJobScraper.scrapeJobsWithAI();
       
-      // Override search queries for this request
-      const originalQueries = (customScraper as any).SEARCH_QUERIES;
-      (customScraper as any).SEARCH_QUERIES = [customQuery];
+      // Filter results based on custom query
+      const filteredResults = searchResults.filter(job => {
+        const jobText = `${job.title} ${job.description} ${job.requirements}`.toLowerCase();
+        const queryWords = customQuery.toLowerCase().split(' ');
+        return queryWords.some(word => jobText.includes(word));
+      });
       
-      // Perform AI search
-      const searchResults = await customScraper.scrapeJobsWithAI();
-      
-      // Filter results based on max results parameter
-      const limitedResults = searchResults.slice(0, searchParams.maxResults);
+      // Limit results based on max results parameter
+      const limitedResults = filteredResults.slice(0, searchParams.maxResults);
       
       const processingTime = Date.now() - startTime;
       
@@ -524,9 +606,10 @@ export async function setupRoutes(app: Express, storage: IStorage) {
             parameters: {
               type: "object",
               properties: fn.parameters.shape,
-              required: Object.keys(fn.parameters.shape).filter(key => 
-                !fn.parameters.shape[key].isOptional()
-              )
+              required: Object.keys(fn.parameters.shape).filter(key => {
+                const shape = fn.parameters.shape as any;
+                return !shape[key].isOptional();
+              })
             }
           }
         })),

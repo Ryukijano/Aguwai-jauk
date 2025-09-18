@@ -142,3 +142,18 @@ CREATE TRIGGER update_applications_updated_at BEFORE UPDATE ON applications
 DROP TRIGGER IF EXISTS update_events_updated_at ON events;
 CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Cache entries table for multi-tier caching
+CREATE TABLE IF NOT EXISTS cache_entries (
+  key VARCHAR(512) PRIMARY KEY,
+  value JSONB NOT NULL,
+  metadata JSONB NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  access_count INTEGER DEFAULT 1
+);
+
+-- Create indexes for cache performance
+CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache_entries ((metadata->>'expiresAt')::BIGINT);
+CREATE INDEX IF NOT EXISTS idx_cache_accessed_at ON cache_entries (accessed_at);
+CREATE INDEX IF NOT EXISTS idx_cache_created_at ON cache_entries (created_at);
