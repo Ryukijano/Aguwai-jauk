@@ -168,69 +168,40 @@ export class AIJobScraperService {
    * Search for jobs using Google Gemini
    */
   async searchJobsWithGemini(): Promise<InsertJobListing[]> {
-    console.log('🔍 Searching jobs with Google Gemini...');
+    console.log('🔍 Searching and extracting real jobs with Google Gemini...');
     const jobs: InsertJobListing[] = [];
     
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
       
-      for (const query of SEARCH_QUERIES.slice(3, 6)) { // Different queries than GPT
-        await this.delay(this.rateLimitDelay);
+      // Search for real jobs and use Gemini to extract information
+      for (const query of SEARCH_QUERIES.slice(2, 4)) { // Different queries than GPT
+        const searchResults = await webSearchService.searchForJobs(query, 3);
         
-        const prompt = `As a job search specialist for teaching positions in Assam, India, find current job openings for: "${query}".
-                       
-                       Search for positions from:
-                       - Government schools and colleges in Assam
-                       - APSC (Assam Public Service Commission)
-                       - SSA Assam (Sarva Shiksha Abhiyan)
-                       - DEE Assam (Directorate of Elementary Education)
-                       - Private schools in major cities (Guwahati, Jorhat, Dibrugarh, etc.)
-                       
-                       For each job, extract:
-                       - Job title
-                       - Organization/School name
-                       - Location in Assam
-                       - Job description
-                       - Eligibility requirements
-                       - Salary information
-                       - Application deadline
-                       - Application process/link
-                       - Job type (permanent/contract/temporary)
-                       
-                       Format the response as a JSON array with 3-5 job listings.`;
-        
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-        
-        // Extract JSON from the response
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            const jobListings = JSON.parse(jsonMatch[0]);
-            
-            for (const job of jobListings) {
-              const formattedJob = await this.extractJobFromContent({
-                title: job.title || job.jobTitle || '',
-                content: JSON.stringify(job),
-                url: job.applicationLink || job.link || '',
-                source: 'Google Gemini Search'
-              });
-              
-              if (formattedJob) {
-                jobs.push(formattedJob);
-              }
+        // Use Gemini to enrich and structure the real search results
+        for (const result of searchResults) {
+          if (result) {
+            const enrichedJob = await this.enrichJobWithGemini(this.convertPartialToFullJob(result));
+            if (enrichedJob) {
+              jobs.push(enrichedJob);
             }
-          } catch (parseError) {
-            console.error('Error parsing Gemini response:', parseError);
           }
         }
       }
       
-      // Additionally, scrape specific URLs using Gemini for extraction
-      for (const sourceUrl of JOB_SOURCES.slice(2, 4)) {
-        const scrapedJobs = await this.scrapeUrlWithGemini(sourceUrl);
-        jobs.push(...scrapedJobs);
+      // Additionally, fetch aggregator sites and extract jobs
+      const aggregatorUrls = [
+        'https://assamjobz.com/category/teaching-jobs/',
+        'https://dee.assam.gov.in/portlets/recruitment',
+        'https://www.sarkariresult.com/assam/'
+      ];
+      
+      for (const url of aggregatorUrls) {
+        const pageContent = await webSearchService.fetchWebPage(url);
+        if (pageContent) {
+          const extractedJobs = await this.extractJobsFromPageWithGemini(pageContent);
+          jobs.push(...extractedJobs);
+        }
       }
       
     } catch (error) {
@@ -243,6 +214,61 @@ export class AIJobScraperService {
   /**
    * Scrape a specific URL using GPT for extraction
    */
+  private async extractJobsFromPageWithGemini(pageContent: any): Promise<InsertJobListing[]> {
+    const jobs: InsertJobListing[] = [];
+    
+    try {
+      if (!pageContent || !pageContent.text) return jobs;
+      
+      const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+      
+      const prompt = `Extract teaching job listings from this webpage content.
+                     Focus on teacher positions in Assam, India.
+                     
+                     URL: ${pageContent.url}
+                     Page Title: ${pageContent.title}
+                     Content: ${pageContent.text.substring(0, 4000)}
+                     
+                     For each job found, extract:
+                     - title: job title
+                     - organization: employer name
+                     - location: job location in Assam
+                     - description: job details
+                     - requirements: eligibility criteria
+                     - salary: salary information
+                     - deadline: application deadline
+                     - type: job type (full-time/part-time/contract)
+                     - link: application link if available
+                     
+                     Return as JSON array with extracted jobs.`;
+      
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const listings = JSON.parse(jsonMatch[0]);
+        
+        for (const job of listings) {
+          const formattedJob = await this.extractJobFromContent({
+            title: job.title || '',
+            content: JSON.stringify(job),
+            url: pageContent.url,
+            source: `Web - ${new URL(pageContent.url).hostname}`
+          });
+          
+          if (formattedJob) {
+            jobs.push(formattedJob);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error extracting jobs with Gemini:', error);
+    }
+    
+    return jobs;
+  }
+
   private async scrapeUrlWithGPT(url: string): Promise<InsertJobListing[]> {
     const jobs: InsertJobListing[] = [];
     
@@ -306,56 +332,138 @@ export class AIJobScraperService {
    * Scrape a specific URL using Gemini for extraction
    */
   private async scrapeUrlWithGemini(url: string): Promise<InsertJobListing[]> {
-    const jobs: InsertJobListing[] = [];
-    
+    // This method can be removed as we're now using the web search service
+    return [];
+  }
+
+  /**
+   * Convert partial job listing to full job listing
+   */
+  private convertPartialToFullJob(partial: Partial<InsertJobListing>): InsertJobListing {
+    return {
+      title: partial.title || 'Teaching Position',
+      organization: partial.organization || 'Educational Institution',
+      location: partial.location || 'Assam, India',
+      description: partial.description || 'Teaching position in Assam. Check official notification for details.',
+      requirements: partial.requirements || 'As per official notification',
+      salary: partial.salary || 'As per government norms',
+      applicationDeadline: partial.applicationDeadline || null,
+      jobType: partial.jobType || 'full-time',
+      category: partial.category || 'Teaching',
+      tags: partial.tags || [],
+      source: partial.source || 'Web',
+      sourceUrl: partial.sourceUrl || '',
+      applicationLink: partial.applicationLink || '',
+      isActive: partial.isActive !== undefined ? partial.isActive : true,
+      externalId: partial.externalId || `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      aiSummary: partial.aiSummary || null
+    };
+  }
+
+  /**
+   * Enrich job listing with GPT analysis
+   */
+  private async enrichJobWithGPT(job: InsertJobListing): Promise<InsertJobListing> {
     try {
-      if (this.processedUrls.has(url)) return jobs;
-      this.processedUrls.add(url);
-      
-      // Fetch the webpage
-      const response = await axios.get(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        timeout: 10000
+      const prompt = `Analyze and enrich this teaching job listing with missing information:
+                     Title: ${job.title}
+                     Organization: ${job.organization}
+                     Location: ${job.location}
+                     Description: ${job.description?.substring(0, 500)}
+                     
+                     Provide enriched data including:
+                     - Better formatted description
+                     - Inferred requirements if missing
+                     - Estimated salary range if not specified
+                     - Proper categorization
+                     - Relevant tags
+                     
+                     Return as JSON with enriched fields.`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a job listing analyst. Enrich job data with relevant information based on context.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 1000
       });
-      
-      const $ = cheerio.load(response.data);
-      const pageText = $('body').text().slice(0, 5000);
-      
+
+      const content = response.choices[0]?.message?.content;
+      if (content) {
+        const enrichedData = JSON.parse(content);
+        
+        // Merge enriched data with original job
+        return {
+          ...job,
+          description: enrichedData.description || job.description,
+          requirements: enrichedData.requirements || job.requirements,
+          salary: enrichedData.salary || job.salary,
+          category: enrichedData.category || job.category,
+          tags: enrichedData.tags || job.tags,
+          aiSummary: enrichedData.summary || await this.generateAISummary(job)
+        };
+      }
+    } catch (error) {
+      console.error('Error enriching job with GPT:', error);
+    }
+    
+    return job;
+  }
+
+  /**
+   * Enrich job listing with Gemini analysis
+   */
+  private async enrichJobWithGemini(job: InsertJobListing): Promise<InsertJobListing> {
+    try {
       const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
       
-      const prompt = `Extract teaching job listings from this webpage content.
-                     Focus on teacher positions in Assam.
+      const prompt = `Analyze and enrich this teaching job listing:
+                     Title: ${job.title}
+                     Organization: ${job.organization}
+                     Location: ${job.location}
+                     Current Description: ${job.description?.substring(0, 500)}
                      
-                     Content: ${pageText}
+                     Provide enriched information:
+                     - Enhanced description
+                     - Detailed requirements (if missing)
+                     - Salary estimation (if not provided)
+                     - Proper job category
+                     - Relevant tags for searchability
                      
-                     Return as JSON array with fields: title, organization, location, description, 
-                     requirements, salary, deadline, type, link`;
-      
+                     Format as JSON with enriched fields.`;
+
       const result = await model.generateContent(prompt);
       const text = result.response.text();
       
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      // Extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const listings = JSON.parse(jsonMatch[0]);
+        const enrichedData = JSON.parse(jsonMatch[0]);
         
-        for (const job of listings) {
-          const formattedJob = await this.extractJobFromContent({
-            title: job.title || '',
-            content: JSON.stringify(job),
-            url: url,
-            source: `Gemini - ${new URL(url).hostname}`
-          });
-          
-          if (formattedJob) {
-            jobs.push(formattedJob);
-          }
-        }
+        // Merge enriched data with original job
+        return {
+          ...job,
+          description: enrichedData.description || job.description,
+          requirements: enrichedData.requirements || job.requirements,
+          salary: enrichedData.salary || job.salary,
+          category: enrichedData.category || job.category,
+          tags: enrichedData.tags || job.tags,
+          aiSummary: enrichedData.summary || await this.generateAISummary(job)
+        };
       }
     } catch (error) {
-      console.error(`Error scraping ${url} with Gemini:`, error);
+      console.error('Error enriching job with Gemini:', error);
     }
     
-    return jobs;
+    return job;
   }
 
   /**
