@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bot, Send, X, MessageSquare, Minimize2, Maximize2 } from "lucide-react";
+import { Bot, Send, X, MessageSquare, Minimize2, Maximize2, MapPin, FileText, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatMessage } from "@/lib/types";
@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAIContext, generateContextHash } from "@/contexts/AIPageContext";
 
 const AIChatPopup = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,15 +17,65 @@ const AIChatPopup = () => {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { context } = useAIContext();
+  const lastContextHashRef = useRef<string>("");
 
   const { data: messages = [], isLoading } = useQuery<ChatMessage[]>({
     queryKey: ["/api/ai/chat-history"],
     refetchInterval: 5000,
   });
 
+  // Generate context hash to avoid resending unchanged context
+  const contextHash = useMemo(() => generateContextHash(context), [context]);
+
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", "/api/ai/chat", { message });
+      // Force get the latest context from the provider or create a fresh one
+      const currentPath = window.location.pathname;
+      
+      // Determine current page more accurately
+      let currentPage: string = 'Unknown';
+      if (currentPath.match(/\/jobs\/\d+/)) {
+        currentPage = 'JobDetails';
+      } else if (currentPath === '/jobs') {
+        currentPage = 'Jobs';
+      } else if (currentPath === '/applications') {
+        currentPage = 'Applications';
+      } else if (currentPath === '/dashboard') {
+        currentPage = 'Dashboard';
+      }
+      
+      const latestContext = context ? {
+        ...context,
+        page: currentPage as any, // Ensure page matches current route
+        route: currentPath,
+        timestamp: Date.now() // Ensure timestamp is always current
+      } : {
+        route: currentPath,
+        page: currentPage as any,
+        timestamp: Date.now(),
+        version: 1
+      };
+      
+      // Add a context refresh key to force the backend to use fresh context
+      const contextRefreshKey = `${latestContext.page}_${latestContext.route}_${Date.now()}`;
+      
+      console.log('Sending message with LATEST context:', latestContext);
+      console.log('Context refresh key:', contextRefreshKey);
+      console.log('Context details:', {
+        page: latestContext.page,
+        route: latestContext.route,
+        hasVisibleSummary: !!latestContext.visibleSummary,
+        timestamp: latestContext.timestamp,
+        jobTitle: latestContext.visibleSummary?.job?.title || 'N/A',
+        jobOrg: latestContext.visibleSummary?.job?.organization || 'N/A'
+      });
+      
+      const response = await apiRequest("POST", "/api/ai/chat", { 
+        message,
+        pageContext: latestContext, // Send latest context
+        contextRefreshKey // Send refresh key to identify context changes
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -115,7 +166,22 @@ const AIChatPopup = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">AI Assistant</h3>
-                  <p className="text-xs text-gray-600">Powered by OpenAI & Gemini</p>
+                  <p className="text-xs text-gray-600">
+                    {context?.page && context.page !== 'Unknown' ? (
+                      <span className="flex items-center gap-1">
+                        {context.page === 'Jobs' && <Briefcase size={10} />}
+                        {context.page === 'Applications' && <FileText size={10} />}
+                        {context.page === 'Dashboard' && <MapPin size={10} />}
+                        {context.page === 'JobDetails' && <FileText size={10} />}
+                        Viewing: {context.page}
+                        {context.visibleSummary?.totalJobs && ` (${context.visibleSummary.totalJobs} jobs)`}
+                        {context.visibleSummary?.totalApplications && ` (${context.visibleSummary.totalApplications} apps)`}
+                        {context.visibleSummary?.job?.title && ` - ${context.visibleSummary.job.title}`}
+                      </span>
+                    ) : (
+                      'Powered by OpenAI & Gemini'
+                    )}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">

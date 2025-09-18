@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useAIContextPublisher } from "@/contexts/AIPageContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import MainLayout from "@/components/layout/MainLayout";
 import {
@@ -55,6 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Star, StarOff } from "lucide-react";
 
 const Documents = () => {
+  const { publishContext } = useAIContextPublisher();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isResumeUploadDialogOpen, setIsResumeUploadDialogOpen] = useState(false);
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
@@ -69,9 +71,15 @@ const Documents = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resumeFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
 
   const { data: documents, isLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
   
   const { data: resumesData, isLoading: isLoadingResumes } = useQuery<{
@@ -80,14 +88,48 @@ const Documents = () => {
     limit: number;
   }>({
     queryKey: ["/api/documents/resumes"],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
   // Filter documents by category
   const filteredDocuments = documents
     ? category === "All"
       ? documents
-      : documents.filter((doc) => doc.type === category)
+      : documents.filter((doc) => doc?.type === category)
     : [];
+  
+  // Publish context when documents or selection changes
+  useEffect(() => {
+    // Skip if still loading
+    if (isLoading || isLoadingResumes) return;
+    
+    try {
+      const visibleDocuments = (filteredDocuments || []).slice(0, 3).map((doc) => ({
+        id: doc?.id || 0,
+        name: doc?.name || 'Unnamed Document',
+        type: doc?.type || 'Other'
+      }));
+      
+      const selection = selectedDocumentId ? {
+        documentId: selectedDocumentId
+      } : undefined;
+      
+      publishContext({
+        route: window.location.pathname,
+        page: 'Documents',
+        selection,
+        visibleSummary: {
+          documents: visibleDocuments
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish Documents context:', error);
+    }
+  }, [filteredDocuments, selectedDocumentId, publishContext, isLoading, isLoadingResumes]);
 
   // File upload mutation
   const uploadDocument = useMutation({
@@ -328,7 +370,7 @@ const Documents = () => {
                 />
                 <p>Loading resumes...</p>
               </div>
-            ) : !resumesData || resumesData.resumes.length === 0 ? (
+            ) : !resumesData || resumesData?.resumes?.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <FileText className="inline-block mb-4" size={40} />
                 <p className="mb-2">No resumes uploaded yet</p>
@@ -341,7 +383,7 @@ const Documents = () => {
               </div>
             ) : (
               <div className="grid gap-4">
-                {resumesData.resumes.map((resume) => (
+                {(resumesData?.resumes || []).map((resume) => (
                   <div
                     key={resume.id}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
@@ -351,9 +393,9 @@ const Documents = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-800">
-                            {resume.name}
+                            {resume?.name || 'Unnamed Resume'}
                           </p>
-                          {resume.isDefault && (
+                          {resume?.isDefault && (
                             <Badge className="bg-green-100 text-green-700">
                               <Star size={12} className="mr-1" />
                               Default
@@ -361,13 +403,13 @@ const Documents = () => {
                           )}
                         </div>
                         <p className="text-sm text-gray-500">
-                          Uploaded {format(new Date(resume.uploadedAt), "MMM d, yyyy")}
-                          {resume.size && ` • ${(resume.size / 1024).toFixed(1)} KB`}
+                          Uploaded {resume?.uploadedAt ? format(new Date(resume.uploadedAt), "MMM d, yyyy") : 'Unknown date'}
+                          {resume?.size && ` • ${(resume.size / 1024).toFixed(1)} KB`}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {!resume.isDefault && (
+                      {!resume?.isDefault && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -406,7 +448,7 @@ const Documents = () => {
                     </div>
                   </div>
                 ))}
-                {resumesData.count >= resumesData.limit && (
+                {resumesData?.count >= resumesData?.limit && (
                   <div className="text-center p-4 bg-yellow-50 rounded-lg">
                     <p className="text-sm text-yellow-800">
                       You've reached the maximum limit of {resumesData.limit} resumes.

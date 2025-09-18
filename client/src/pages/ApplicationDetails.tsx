@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useAIContextPublisher } from '@/contexts/AIPageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,20 +26,69 @@ import type { Application, JobListing, ApplicationStatusHistory } from '@shared/
 export const ApplicationDetails: React.FC = () => {
   const [, params] = useRoute('/applications/:id');
   const applicationId = params?.id;
+  const { publishContext } = useAIContextPublisher();
   
   const { data: application, isLoading: loadingApplication } = useQuery<Application>({
     queryKey: [`/api/applications/${applicationId}`],
-    enabled: !!applicationId
+    enabled: !!applicationId,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
   
   const { data: history = [], isLoading: loadingHistory } = useQuery<ApplicationStatusHistory[]>({
     queryKey: [`/api/applications/${applicationId}/history`],
-    enabled: !!applicationId
+    enabled: !!applicationId,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
   
-  const { data: jobListings = [] } = useQuery<JobListing[]>({
-    queryKey: ['/api/jobs']
+  const { data: jobListings = [], isLoading: jobsLoading } = useQuery<JobListing[]>({
+    queryKey: ['/api/jobs'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
+  
+  // Publish context when application data changes
+  useEffect(() => {
+    // Skip if still loading or no data
+    if (loadingApplication || loadingHistory || jobsLoading || !application) return;
+    
+    try {
+      const job = jobListings?.find((j) => j?.id === application?.jobId);
+      
+      publishContext({
+        route: window.location.pathname,
+        page: 'ApplicationDetails',
+        params: { applicationId: applicationId || '' },
+        selection: { applicationId: application?.id },
+        visibleSummary: {
+          applications: [{
+            id: application?.id || 0,
+            jobTitle: job?.title || `Application #${application?.id || 'N/A'}`,
+            status: application?.status || 'Pending'
+          }],
+          job: job ? {
+            id: job.id,
+            title: job.title || 'Untitled Job',
+            organization: job.organization || 'Unknown Organization',
+            location: job.location || undefined,
+            category: job.category || undefined
+          } : undefined
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish ApplicationDetails context:', error);
+    }
+  }, [application, applicationId, jobListings, publishContext, loadingApplication, loadingHistory, jobsLoading]);
   
   if (loadingApplication || loadingHistory) {
     return <LoadingSkeleton />;
@@ -62,8 +112,8 @@ export const ApplicationDetails: React.FC = () => {
     );
   }
   
-  const job = jobListings.find((j) => j.id === application.jobId);
-  const normalizedStatus = ((application.status || 'pending').toLowerCase().replace(' ', '_')) as ApplicationStatus;
+  const job = jobListings?.find((j) => j?.id === application?.jobId);
+  const normalizedStatus = ((application?.status || 'pending').toLowerCase().replace(' ', '_')) as ApplicationStatus;
   
   return (
     <div className="space-y-6">

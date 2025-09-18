@@ -6,6 +6,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
 import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react';
 
+// Contexts
+import { AIPageContextProvider } from '@/contexts/AIPageContext';
+
 // Pages
 import Landing from '@/pages/Landing';
 import { Login } from '@/pages/Login';
@@ -18,7 +21,7 @@ import { ApplicationDetails } from '@/pages/ApplicationDetails';
 import { Profile } from '@/pages/Profile';
 
 // Components
-import { AiAssistant } from '@/components/AiAssistant';
+import AIChatPopup from '@/components/ai/AIChatPopup';
 
 // Using the configured query client from lib/queryClient.ts which has default queryFn
 
@@ -174,7 +177,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </main>
 
       {/* AI Assistant */}
-      {user && <AiAssistant />}
+      {user && <AIChatPopup />}
     </div>
   );
 };
@@ -183,48 +186,50 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Switch>
-          <Route path="/" component={Landing} />
-          <Route path="/login" component={Login} />
-          <Route path="/register" component={Register} />
-          <Route path="/dashboard">
-            <Layout>
-              <Dashboard />
-            </Layout>
-          </Route>
-          <Route path="/jobs/:id">
-            <Layout>
-              <JobDetails />
-            </Layout>
-          </Route>
-          <Route path="/jobs">
-            <Layout>
-              <Jobs />
-            </Layout>
-          </Route>
-          <Route path="/applications/:id">
-            <Layout>
-              <ApplicationDetails />
-            </Layout>
-          </Route>
-          <Route path="/applications">
-            <Layout>
-              <Applications />
-            </Layout>
-          </Route>
-          <Route path="/profile">
-            <Layout>
-              <Profile />
-            </Layout>
-          </Route>
-          <Route>
-            {/* Default redirect to landing */}
-            <Landing />
-          </Route>
-        </Switch>
-      </Router>
-      <Toaster />
+      <AIPageContextProvider>
+        <Router>
+          <Switch>
+            <Route path="/" component={Landing} />
+            <Route path="/login" component={Login} />
+            <Route path="/register" component={Register} />
+            <Route path="/dashboard">
+              <Layout>
+                <Dashboard />
+              </Layout>
+            </Route>
+            <Route path="/jobs/:id">
+              <Layout>
+                <JobDetails />
+              </Layout>
+            </Route>
+            <Route path="/jobs">
+              <Layout>
+                <Jobs />
+              </Layout>
+            </Route>
+            <Route path="/applications/:id">
+              <Layout>
+                <ApplicationDetails />
+              </Layout>
+            </Route>
+            <Route path="/applications">
+              <Layout>
+                <Applications />
+              </Layout>
+            </Route>
+            <Route path="/profile">
+              <Layout>
+                <Profile />
+              </Layout>
+            </Route>
+            <Route>
+              {/* Default redirect to landing */}
+              <Landing />
+            </Route>
+          </Switch>
+        </Router>
+        <Toaster />
+      </AIPageContextProvider>
     </QueryClientProvider>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAIContextPublisher } from '@/contexts/AIPageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -13,21 +14,32 @@ import { useToast } from '@/hooks/use-toast';
 import type { Application, JobListing } from '@shared/schema';
 
 export const Applications: React.FC = () => {
+  const { publishContext } = useAIContextPublisher();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'all'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'oldest'>('recent');
   
   const { data: applications = [], isLoading } = useQuery<Application[]>({
-    queryKey: ['/api/applications']
+    queryKey: ['/api/applications'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
   
-  const { data: jobListings = [] } = useQuery<JobListing[]>({
-    queryKey: ['/api/jobs']
+  const { data: jobListings = [], isLoading: jobsLoading } = useQuery<JobListing[]>({
+    queryKey: ['/api/jobs'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
   
   // Get job details for each application
-  const applicationsWithJobs = applications.map((app) => {
-    const job = jobListings.find((j) => j.id === app.jobId);
+  const applicationsWithJobs = (applications || []).map((app) => {
+    const job = jobListings?.find((j) => j?.id === app?.jobId);
     return {
       ...app,
       job
@@ -35,9 +47,10 @@ export const Applications: React.FC = () => {
   });
   
   // Filter applications
-  const filteredApplications = applicationsWithJobs.filter((app) => {
+  const filteredApplications = (applicationsWithJobs || []).filter((app) => {
+    if (!app) return false;
     if (statusFilter === 'all') return true;
-    const normalizedStatus = (app.status || 'pending').toLowerCase().replace(' ', '_');
+    const normalizedStatus = (app?.status || 'pending').toLowerCase().replace(' ', '_');
     return normalizedStatus === statusFilter;
   });
   
@@ -50,25 +63,58 @@ export const Applications: React.FC = () => {
   
   // Group applications by status
   const groupedApplications = {
-    pending: sortedApplications.filter(app => (app.status || '').toLowerCase() === 'pending' || !app.status),
-    under_review: sortedApplications.filter(app => (app.status || '').toLowerCase() === 'under_review'),
-    shortlisted: sortedApplications.filter(app => (app.status || '').toLowerCase() === 'shortlisted' || (app.status || '').toLowerCase() === 'interview'),
-    rejected: sortedApplications.filter(app => (app.status || '').toLowerCase() === 'rejected'),
-    accepted: sortedApplications.filter(app => (app.status || '').toLowerCase() === 'accepted')
+    pending: sortedApplications.filter(app => (app?.status || '').toLowerCase() === 'pending' || !app?.status),
+    under_review: sortedApplications.filter(app => (app?.status || '').toLowerCase() === 'under_review'),
+    shortlisted: sortedApplications.filter(app => (app?.status || '').toLowerCase() === 'shortlisted' || (app?.status || '').toLowerCase() === 'interview'),
+    rejected: sortedApplications.filter(app => (app?.status || '').toLowerCase() === 'rejected'),
+    accepted: sortedApplications.filter(app => (app?.status || '').toLowerCase() === 'accepted')
   };
   
   const statusCounts = {
-    all: applications.length,
-    pending: groupedApplications.pending.length,
-    under_review: groupedApplications.under_review.length,
-    shortlisted: groupedApplications.shortlisted.length,
-    rejected: groupedApplications.rejected.length,
-    accepted: groupedApplications.accepted.length
+    all: applications?.length || 0,
+    pending: groupedApplications.pending?.length || 0,
+    under_review: groupedApplications.under_review?.length || 0,
+    shortlisted: groupedApplications.shortlisted?.length || 0,
+    rejected: groupedApplications.rejected?.length || 0,
+    accepted: groupedApplications.accepted?.length || 0
   };
   
-  const successRate = applications.length > 0 
-    ? Math.round((groupedApplications.accepted.length / applications.length) * 100)
+  const successRate = applications?.length > 0 
+    ? Math.round((groupedApplications.accepted?.length / applications?.length) * 100)
     : 0;
+  
+  // Publish context when data or filters change
+  useEffect(() => {
+    // Skip if still loading or no data
+    if (isLoading || jobsLoading) return;
+    
+    try {
+      const visibleApplications = (sortedApplications || []).slice(0, 5).map((app) => ({
+        id: app?.id || 0,
+        jobTitle: app?.job?.title || `Application #${app?.id || 'N/A'}`,
+        status: app?.status || 'Pending'
+      }));
+      
+      publishContext({
+        route: window.location.pathname,
+        page: 'Applications',
+        visibleSummary: {
+          applications: visibleApplications,
+          totalApplications: applications?.length || 0,
+          filters: {
+            query: statusFilter !== 'all' ? statusFilter : undefined
+          },
+          stats: {
+            applications: applications?.length || 0,
+            interviews: statusCounts.shortlisted,
+            offers: statusCounts.accepted
+          }
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish Applications context:', error);
+    }
+  }, [sortedApplications, applications?.length, statusFilter, statusCounts, publishContext, isLoading, jobsLoading]);
   
   return (
     <div className="space-y-6">
@@ -86,7 +132,7 @@ export const Applications: React.FC = () => {
             <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{applications.length}</div>
+            <div className="text-2xl font-bold">{applications?.length || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {statusCounts.pending} pending review
             </p>

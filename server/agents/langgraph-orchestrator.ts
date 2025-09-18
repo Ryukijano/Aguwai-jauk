@@ -17,8 +17,7 @@ import {
   getTracedOpenAI, 
   traceConversation, 
   logAgentMetrics,
-  traceMemoryOperation,
-  traceable 
+  traceMemoryOperation
 } from "../services/langsmith-observability";
 
 // Initialize AI clients with latest models and tracing
@@ -98,6 +97,20 @@ const InterviewPrepSchema = z.object({
 async function supervisorAgent(state: typeof AgentStateAnnotation.State) {
   const lastMessage = state.messages[state.messages.length - 1];
   const userMessage = lastMessage.content as string;
+  const pageContext = state.context;
+  
+  // Build page context description
+  let pageContextInfo = "";
+  if (pageContext && pageContext.currentPage) {
+    pageContextInfo = `\n\nCurrent Context: User is on the ${pageContext.currentPage} page`;
+    if (pageContext.selectedJobId) {
+      pageContextInfo += `, viewing a specific job`;
+    }
+    if (pageContext.filters?.query) {
+      pageContextInfo += `, with search filter "${pageContext.filters.query}"`;
+    }
+    pageContextInfo += ".";
+  }
   
   // Use OpenAI's new Responses API with web search for enhanced context
   const response = await openai.chat.completions.create({
@@ -111,9 +124,13 @@ Available agents:
 1. resume_analyzer - Analyzes teaching resumes using Google's Gemini
 2. job_searcher - Searches for teaching jobs in Assam
 3. interview_prepper - Prepares interview questions and tips
-4. conversationalist - General conversation and guidance
+4. conversationalist - General conversation and guidance (use for page awareness questions)
 
-Based on the user's message, decide which agent to invoke. Respond with JSON:
+Based on the user's message, decide which agent to invoke. 
+IMPORTANT: If the user asks about their current page, navigation, or what they're viewing, use the conversationalist agent.
+${pageContextInfo}
+
+Respond with JSON:
 {
   "agent": "agent_name",
   "reasoning": "why this agent is chosen",
@@ -997,10 +1014,50 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
   const messages = state.messages;
   const lastUserMessage = messages.filter(m => m._getType() === "human").pop();
   const userId = state.userId;
+  const pageContext = state.context;  // Get page context from state
   
   try {
     // Get user context for personalized responses
     const userContext = userId ? await PostgresMemoryStore.getUserContext(userId) : null;
+    
+    // Build page context description for system prompt
+    let pageContextDescription = "";
+    if (pageContext && pageContext.currentPage) {
+      pageContextDescription = `\n\nCURRENT PAGE CONTEXT:\n`;
+      pageContextDescription += `The user is currently on the ${pageContext.currentPage} page.`;
+      
+      if (pageContext.visibleJobs && pageContext.visibleJobs.length > 0) {
+        pageContextDescription += `\nThey are viewing ${pageContext.visibleJobs.length} job listings`;
+        if (pageContext.visibleJobs[0]) {
+          pageContextDescription += `, including: ${pageContext.visibleJobs.slice(0, 3).map((j: any) => `"${j.title}" at ${j.organization}`).join(", ")}`;
+        }
+      }
+      
+      if (pageContext.selectedJobId) {
+        const selectedJob = pageContext.visibleJobs?.find((j: any) => j.id === pageContext.selectedJobId);
+        if (selectedJob) {
+          pageContextDescription += `\nThey are specifically looking at the job: "${selectedJob.title}" at ${selectedJob.organization} in ${selectedJob.location || 'Assam'}`;
+        }
+      }
+      
+      if (pageContext.filters) {
+        if (pageContext.filters.query) {
+          pageContextDescription += `\nThey have filtered jobs by searching for: "${pageContext.filters.query}"`;
+        }
+        if (pageContext.filters.location) {
+          pageContextDescription += `\nThey are filtering by location: ${pageContext.filters.location}`;
+        }
+        if (pageContext.filters.category) {
+          pageContextDescription += `\nThey are filtering by category: ${pageContext.filters.category}`;
+        }
+      }
+      
+      if (pageContext.visibleApplications && pageContext.visibleApplications.length > 0) {
+        pageContextDescription += `\nThey have ${pageContext.visibleApplications.length} job applications visible`;
+      }
+      
+      pageContextDescription += `\n\nIMPORTANT: Use this context to provide relevant, page-aware responses. If asked "What page am I on?", describe the current page and any relevant details visible to the user.`;
+    }
     
     // ADK-style conversational agent with context awareness
     const response = await openai.chat.completions.create({
@@ -1025,8 +1082,10 @@ async function conversationalAgent(state: typeof AgentStateAnnotation.State) {
           • Culturally sensitive to Assam context
           • Solution-oriented approach
           • Personalized based on user history
+          • PAGE-AWARE: Always acknowledge what the user is currently viewing
           
-          ${userContext ? `USER CONTEXT:\n${userContext}` : ""}`
+          ${userContext ? `USER CONTEXT:\n${userContext}` : ""}
+          ${pageContextDescription}`
         },
         {
           role: "user",
@@ -1263,7 +1322,8 @@ export function createMultiAgentGraph() {
 export async function processMultiAgentChat(
   message: string,
   userId?: string,
-  threadId?: string
+  threadId?: string,
+  pageContext?: any
 ): Promise<{ response: string; threadId: string }> {
   const graph = createMultiAgentGraph();
   
@@ -1274,12 +1334,21 @@ export async function processMultiAgentChat(
     }
   };
   
+  // Include page context in the state for agents to use
+  const contextData = pageContext ? {
+    currentPage: pageContext.page,
+    visibleJobs: pageContext.visibleSummary?.jobs || [],
+    visibleApplications: pageContext.visibleSummary?.applications || [],
+    selectedJobId: pageContext.selection?.jobId,
+    filters: pageContext.visibleSummary?.filters || {}
+  } : {};
+
   // Invoke the graph
   const result = await graph.invoke(
     {
       messages: [new HumanMessage(message)],
       userId,
-      context: {},
+      context: contextData,
       memory: {}
     },
     config

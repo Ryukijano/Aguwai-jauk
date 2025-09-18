@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAIContextPublisher } from '@/contexts/AIPageContext';
 import { useParams, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ import type { JobListing, Document } from '@shared/schema';
 
 export const JobDetails: React.FC = () => {
   const { id } = useParams();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const { publishContext } = useAIContextPublisher();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
@@ -31,11 +33,21 @@ export const JobDetails: React.FC = () => {
   const { data: job, isLoading } = useQuery<JobListing>({
     queryKey: [`/api/jobs/${id}`],
     enabled: !!id,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
   const { data: existingApplication } = useQuery<{ hasApplied: boolean }>({
     queryKey: [`/api/applications/check/${id}`],
     enabled: !!id && isAuthenticated,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
   const { data: userResumes } = useQuery<{
@@ -45,6 +57,11 @@ export const JobDetails: React.FC = () => {
   }>({
     queryKey: ['/api/documents/resumes'],
     enabled: isAuthenticated && showApplyDialog,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
   const { data: defaultResume } = useQuery<{
@@ -54,7 +71,39 @@ export const JobDetails: React.FC = () => {
   }>({
     queryKey: ['/api/documents/default-resume'],
     enabled: isAuthenticated && showApplyDialog,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
+  
+  // Publish context when job data changes
+  useEffect(() => {
+    // Skip if still loading or no data
+    if (isLoading || !job) return;
+    
+    try {
+      publishContext({
+        route: location,
+        page: 'JobDetails',
+        params: { jobId: id || '' },
+        selection: { jobId: job?.id },
+        visibleSummary: {
+          job: {
+            id: job?.id || 0,
+            title: job?.title || 'Untitled Job',
+            organization: job?.organization || 'Unknown Organization',
+            location: job?.location || undefined,
+            category: job?.category || undefined,
+            requirements: job?.requirements ? job.requirements.substring(0, 100) : undefined
+          }
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish JobDetails context:', error);
+    }
+  }, [location, job, id, publishContext, isLoading]);
 
   const applyMutation = useMutation({
     mutationFn: async (data: { jobId: number; coverLetter: string; resumeUrl?: string }) => {

@@ -26,6 +26,29 @@ import { processAgentChat } from "../ai-agent";
 
 const router = express.Router();
 
+// In-memory context store to avoid TypeScript session type issues
+interface AIContext {
+  pageContext?: any;
+  lastUpdated: string;
+}
+
+const contextStore = new Map<string, AIContext>();
+
+// Clean up old contexts every hour to prevent memory leaks
+const CONTEXT_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+const CONTEXT_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+setInterval(() => {
+  const now = Date.now();
+  contextStore.forEach((context, sessionId) => {
+    const contextAge = now - new Date(context.lastUpdated).getTime();
+    if (contextAge > CONTEXT_MAX_AGE) {
+      contextStore.delete(sessionId);
+      console.log(`Cleaned up old context for session: ${sessionId}`);
+    }
+  });
+}, CONTEXT_CLEANUP_INTERVAL);
+
 // Set up multer for file uploads (voice and image)
 const upload = multer({
   storage: multer.diskStorage({
@@ -64,25 +87,52 @@ const getAssistant = async () => {
   return ASSISTANT_ID;
 };
 
-// Store threads by session ID
-const threadsBySession: Record<string, string> = {};
+// Store threads by session ID with context tracking
+interface ThreadContext {
+  threadId: string;
+  lastPage: string;
+  lastRoute: string;
+  lastRefreshKey?: string;
+}
 
-// Get or create thread for a session
-const getThreadForSession = async (sessionId: string) => {
-  if (!threadsBySession[sessionId]) {
+const threadsBySession: Record<string, ThreadContext> = {};
+
+// Get or create thread for a session, creating new thread if context changed significantly
+const getThreadForSession = async (sessionId: string, pageContext: any, contextRefreshKey?: string) => {
+  const existingContext = threadsBySession[sessionId];
+  
+  // Determine if we need a new thread based on page change
+  const needNewThread = !existingContext || 
+    existingContext.lastPage !== pageContext?.page ||
+    existingContext.lastRefreshKey !== contextRefreshKey ||
+    // Create new thread if moving between major sections
+    (existingContext.lastPage === 'Jobs' && pageContext?.page === 'JobDetails') ||
+    (existingContext.lastPage === 'JobDetails' && pageContext?.page === 'Jobs') ||
+    (existingContext.lastPage === 'Dashboard' && pageContext?.page !== 'Dashboard');
+  
+  if (needNewThread) {
     const thread = await createThread();
-    threadsBySession[sessionId] = thread.id;
-    console.log(`Created new thread for session ${sessionId}: ${thread.id}`);
+    threadsBySession[sessionId] = {
+      threadId: thread.id,
+      lastPage: pageContext?.page || 'Unknown',
+      lastRoute: pageContext?.route || '',
+      lastRefreshKey: contextRefreshKey
+    };
+    console.log(`Created new thread for session ${sessionId} due to context change from ${existingContext?.lastPage || 'none'} to ${pageContext?.page}: ${thread.id}`);
+    return thread.id;
   }
-  return threadsBySession[sessionId];
+  
+  return existingContext.threadId;
 };
 
 // Text chat endpoint
 router.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, pageContext, contextRefreshKey } = req.body;
     const sessionId = req.session.id || 'anonymous';
     console.log("Received chat message:", message, "Session ID:", sessionId);
+    console.log("Received page context:", pageContext);
+    console.log("Context refresh key:", contextRefreshKey);
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
@@ -93,13 +143,51 @@ router.post("/chat", async (req, res) => {
     const assistantId = await getAssistant();
     console.log("Assistant ID:", assistantId);
 
-    console.log("Getting thread for session...");
-    const threadId = await getThreadForSession(sessionId);
+    console.log("Getting thread for session with context check...");
+    const threadId = await getThreadForSession(sessionId, pageContext, contextRefreshKey);
     console.log("Thread ID:", threadId);
 
+    // Create enhanced message with page context - make it more explicit
+    let enhancedMessage = message;
+    if (pageContext) {
+      let contextPrefix = `[IMPORTANT CURRENT CONTEXT - USE THIS FOR YOUR RESPONSE: The user is currently on the ${pageContext.page} page`;
+      
+      if (pageContext.visibleSummary?.job) {
+        contextPrefix += `, viewing the job "${pageContext.visibleSummary.job.title}" at ${pageContext.visibleSummary.job.organization}`;
+        if (pageContext.visibleSummary.job.location) {
+          contextPrefix += ` in ${pageContext.visibleSummary.job.location}`;
+        }
+      }
+      
+      if (pageContext.visibleSummary?.totalJobs) {
+        contextPrefix += `, with ${pageContext.visibleSummary.totalJobs} total jobs visible`;
+      }
+      
+      if (pageContext.visibleSummary?.filters?.query) {
+        contextPrefix += `, filtered by search query "${pageContext.visibleSummary.filters.query}"`;
+      }
+      
+      if (pageContext.visibleSummary?.filters?.location) {
+        contextPrefix += ` in ${pageContext.visibleSummary.filters.location}`;
+      }
+      
+      if (pageContext.visibleSummary?.filters?.category) {
+        contextPrefix += ` for ${pageContext.visibleSummary.filters.category} category`;
+      }
+      
+      if (pageContext.visibleSummary?.applications && pageContext.visibleSummary.applications.length > 0) {
+        contextPrefix += `, with ${pageContext.visibleSummary.applications.length} applications visible`;
+      }
+      
+      contextPrefix += ". YOU MUST provide context-aware responses based on what the user is CURRENTLY viewing on THIS page. Do NOT reference previous pages or cached context.]\n\n";
+      
+      enhancedMessage = contextPrefix + "User's current question from " + pageContext.page + " page: " + message;
+      console.log("Enhanced message with context:", enhancedMessage.substring(0, 200) + "...");
+    }
+    
     // Add message to thread
     console.log("Adding message to thread...");
-    const addedMessage = await addMessageToThread(threadId, message);
+    const addedMessage = await addMessageToThread(threadId, enhancedMessage);
     console.log("Message added:", addedMessage.id);
 
     // Run the assistant on the thread
@@ -168,7 +256,7 @@ router.post("/voice", upload.single('audio'), async (req, res) => {
     
     // Get assistant and thread
     const assistantId = await getAssistant();
-    const threadId = await getThreadForSession(sessionId);
+    const threadId = await getThreadForSession(sessionId, null, null);
     
     // Upload the audio file
     const fileId = await uploadFile(req.file.path, "assistants_input");
@@ -225,7 +313,7 @@ router.post("/analyze-image", upload.single('image'), async (req, res) => {
     
     // Get assistant and thread
     const assistantId = await getAssistant();
-    const threadId = await getThreadForSession(sessionId);
+    const threadId = await getThreadForSession(sessionId, null, null);
     
     // Upload the image file
     const fileId = await uploadFile(req.file.path, "assistants_input");
@@ -282,7 +370,7 @@ router.post("/analyze-document", upload.single('document'), async (req, res) => 
     
     // Get assistant and thread
     const assistantId = await getAssistant();
-    const threadId = await getThreadForSession(sessionId);
+    const threadId = await getThreadForSession(sessionId, null, null);
     
     // Upload the document file
     const fileId = await uploadFile(req.file.path, "assistants_input");
@@ -530,11 +618,11 @@ router.post("/advanced-image", upload.single('image'), async (req, res) => {
 // New AI Agent Chat endpoint with LangGraph multi-agent orchestration
 router.post("/agent-chat", async (req, res) => {
   try {
-    const { message, threadId } = req.body;
+    const { message, threadId, pageContext, contextHash } = req.body;
     const sessionId = req.session.id || 'anonymous';
     const userId = (req as any).user?.id;
 
-    console.log("Agent chat received:", message, "User ID:", userId);
+    console.log("Agent chat received:", message, "User ID:", userId, "Context:", pageContext?.page);
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
@@ -546,10 +634,33 @@ router.post("/agent-chat", async (req, res) => {
     
     // Get user context for enhanced responses
     const userContext = await MemoryStore.getUserContext(userId || "anonymous");
-    const enhancedMessage = userContext ? `${userContext}\n\nUser message: ${message}` : message;
+    
+    // Include page context if provided
+    let contextInfo = "";
+    if (pageContext) {
+      contextInfo = `\n[Current Page Context: User is on ${pageContext.page} page`;
+      if (pageContext.visibleSummary?.totalJobs) {
+        contextInfo += ` viewing ${pageContext.visibleSummary.totalJobs} jobs`;
+      }
+      if (pageContext.visibleSummary?.totalApplications) {
+        contextInfo += ` with ${pageContext.visibleSummary.totalApplications} applications`;
+      }
+      if (pageContext.selection?.jobId) {
+        contextInfo += ` (selected job ID: ${pageContext.selection.jobId})`;
+      }
+      if (pageContext.visibleSummary?.filters?.query) {
+        contextInfo += `, filtered by "${pageContext.visibleSummary.filters.query}"`;
+      }
+      if (pageContext.visibleSummary?.job) {
+        contextInfo += `, viewing job "${pageContext.visibleSummary.job.title}" at ${pageContext.visibleSummary.job.organization}`;
+      }
+      contextInfo += "]\n";
+    }
+    
+    const enhancedMessage = `${contextInfo}${userContext ? userContext + "\n\n" : ""}User message: ${message}`;
 
-    // Process with multi-agent system
-    const result = await processMultiAgentChat(enhancedMessage, userId, threadId);
+    // Process with multi-agent system (pass pageContext for context-aware responses)
+    const result = await processMultiAgentChat(enhancedMessage, userId, threadId, pageContext);
     
     // Store the messages in the database if a user is authenticated
     if (userId) {
@@ -586,6 +697,77 @@ router.post("/agent-chat", async (req, res) => {
     console.error("Agent Chat Error:", error);
     res.status(500).json({ 
       error: "Failed to process agent chat message",
+      details: error.message 
+    });
+  }
+});
+
+// Context endpoint for maintaining page context
+router.post("/context", async (req, res) => {
+  try {
+    const { pageContext } = req.body;
+    const sessionId = req.session.id || 'anonymous';
+    const userId = (req as any).user?.id;
+    
+    if (!pageContext) {
+      return res.status(400).json({ error: "Page context is required" });
+    }
+    
+    // Store context in memory store for future messages
+    const existingContext = contextStore.get(sessionId) || {};
+    
+    contextStore.set(sessionId, {
+      ...existingContext,
+      pageContext,
+      lastUpdated: new Date().toISOString()
+    });
+    
+    // If we have the MemoryStore available, also save to it
+    try {
+      const { MemoryStore } = await import("../agents/memory-store-postgres");
+      if (userId && MemoryStore) {
+        await MemoryStore.saveThreadMemory(
+          `context-${sessionId}`,
+          userId,
+          [],
+          { pageContext, timestamp: new Date() }
+        );
+      }
+    } catch (err) {
+      console.log("MemoryStore not available for context storage");
+    }
+    
+    res.json({ 
+      success: true,
+      timestamp: new Date().toISOString(),
+      contextStored: true
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Context Storage Error:", error);
+    res.status(500).json({ 
+      error: "Failed to store page context",
+      details: error.message 
+    });
+  }
+});
+
+// Get current context endpoint
+router.get("/context", async (req, res) => {
+  try {
+    const sessionId = req.session.id || 'anonymous';
+    const context = contextStore.get(sessionId) || null;
+    
+    res.json({ 
+      context,
+      sessionId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    const error = err as Error;
+    console.error("Context Retrieval Error:", error);
+    res.status(500).json({ 
+      error: "Failed to retrieve page context",
       details: error.message 
     });
   }

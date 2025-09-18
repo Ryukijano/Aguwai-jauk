@@ -1,35 +1,94 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Briefcase, Users, Calendar, TrendingUp, FileText, Bell } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { useAIContextPublisher } from '@/contexts/AIPageContext';
 
 export const Dashboard: React.FC = () => {
-  const { data: user } = useQuery({
-    queryKey: ['/api/me']
+  const [location] = useLocation();
+  const { publishContext } = useAIContextPublisher();
+
+  const { data: user, isLoading: userLoading } = useQuery({
+    queryKey: ['/api/me'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
-  const { data: applications = [] } = useQuery({
-    queryKey: ['/api/applications']
+  const { data: applications = [], isLoading: appsLoading } = useQuery({
+    queryKey: ['/api/applications'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ['/api/jobs']
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery({
+    queryKey: ['/api/jobs'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
+    }
   });
 
   const stats = {
-    totalJobs: jobs.length,
-    applications: applications.length,
-    interviews: applications.filter((app: any) => app.status === 'interview').length,
-    pending: applications.filter((app: any) => app.status === 'Pending').length
+    totalJobs: jobs?.length || 0,
+    applications: applications?.length || 0,
+    interviews: applications?.filter((app: any) => app?.status === 'interview')?.length || 0,
+    pending: applications?.filter((app: any) => app?.status === 'Pending')?.length || 0
   };
+
+  // Publish context whenever data changes
+  useEffect(() => {
+    // Skip if still loading or no data
+    if (userLoading || appsLoading || jobsLoading) return;
+    
+    try {
+      const recentJobs = (jobs || []).slice(0, 5).map((job: any) => ({
+        id: job?.id || 0,
+        title: job?.title || 'Untitled Job',
+        organization: job?.organization || 'Unknown Organization',
+        location: job?.location,
+        category: job?.category
+      }));
+
+      const recentApplications = (applications || []).slice(0, 5).map((app: any) => ({
+        id: app?.id || 0,
+        jobTitle: app?.jobTitle || 'Unknown Job',
+        status: app?.status || 'Pending'
+      }));
+
+      publishContext({
+        route: location,
+        page: 'Dashboard',
+        visibleSummary: {
+          stats: {
+            applications: stats.applications,
+            interviews: stats.interviews,
+            offers: applications?.filter((app: any) => app?.status === 'accepted')?.length || 0
+          },
+          jobs: recentJobs,
+          totalJobs: stats.totalJobs,
+          applications: recentApplications,
+          totalApplications: stats.applications
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish Dashboard context:', error);
+    }
+  }, [location, jobs, applications, stats.applications, stats.interviews, stats.totalJobs, publishContext, userLoading, appsLoading, jobsLoading]);
 
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
       <div>
-        <h1 className="text-3xl font-bold">Welcome back, {user?.fullName || user?.username}!</h1>
+        <h1 className="text-3xl font-bold">Welcome back{user?.fullName || user?.username ? `, ${user?.fullName || user?.username}` : ''}!</h1>
         <p className="text-muted-foreground mt-2">
           Here's an overview of your job search progress
         </p>
@@ -113,24 +172,24 @@ export const Dashboard: React.FC = () => {
           <CardTitle>Recent Applications</CardTitle>
         </CardHeader>
         <CardContent>
-          {applications.length === 0 ? (
+          {!applications || applications.length === 0 ? (
             <p className="text-muted-foreground">No applications yet. Start applying to jobs!</p>
           ) : (
             <div className="space-y-4">
-              {applications.slice(0, 5).map((app: any) => (
+              {(applications || []).slice(0, 5).map((app: any) => (
                 <div key={app.id} className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Application #{app.id}</p>
+                    <p className="font-medium">Application #{app?.id || 'N/A'}</p>
                     <p className="text-sm text-muted-foreground">
-                      Applied on {new Date(app.appliedAt).toLocaleDateString()}
+                      Applied on {app?.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'Unknown date'}
                     </p>
                   </div>
                   <span className={`text-sm px-2 py-1 rounded-full ${
-                    app.status === 'interview' ? 'bg-green-100 text-green-700' :
-                    app.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                    app?.status === 'interview' ? 'bg-green-100 text-green-700' :
+                    app?.status === 'rejected' ? 'bg-red-100 text-red-700' :
                     'bg-yellow-100 text-yellow-700'
                   }`}>
-                    {app.status}
+                    {app?.status || 'Pending'}
                   </span>
                 </div>
               ))}

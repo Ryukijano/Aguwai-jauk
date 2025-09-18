@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useAIContextPublisher } from '@/contexts/AIPageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,9 @@ import { BulkApplyDialog } from '@/components/jobs/BulkApplyDialog';
 import { apiRequest } from '@/lib/queryClient';
 
 export const Jobs: React.FC = () => {
+  const [location] = useLocation();
+  const { publishContext } = useAIContextPublisher();
+  
   const [filters, setFilters] = useState({
     search: '',
     location: '',
@@ -32,7 +36,7 @@ export const Jobs: React.FC = () => {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
   
-  const { data: jobs = [], isLoading } = useQuery({
+  const { data: jobs = [], isLoading, isError } = useQuery({
     queryKey: ['/api/jobs', filters],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -41,8 +45,19 @@ export const Jobs: React.FC = () => {
       if (filters.category) params.append('category', filters.category);
       
       const response = await fetch(`/api/jobs?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch jobs');
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Handle unauthorized gracefully - return empty array
+          return [];
+        }
+        throw new Error('Failed to fetch jobs');
+      }
       return response.json();
+    },
+    retry: (failureCount, error: any) => {
+      // Don't retry on 401 errors
+      if (error?.message?.includes('401')) return false;
+      return failureCount < 2;
     }
   });
   
@@ -61,12 +76,72 @@ export const Jobs: React.FC = () => {
     queryFn: async () => {
       if (!isAuthenticated || !jobs || jobs.length === 0) return [];
       const jobIds = jobs.map((j: any) => j.id);
-      const response = await apiRequest('POST', '/api/applications/check-existing', { jobIds });
-      const data = await response.json();
-      return data.appliedJobIds || [];
+      try {
+        const response = await apiRequest('POST', '/api/applications/check-existing', { jobIds });
+        if (!response.ok && response.status === 401) {
+          return [];
+        }
+        const data = await response.json();
+        return data.appliedJobIds || [];
+      } catch (error) {
+        console.debug('Failed to check applied jobs:', error);
+        return [];
+      }
     },
     enabled: isAuthenticated && !!jobs && jobs.length > 0
   });
+  
+  const locations = ['All Locations', 'Guwahati', 'Dibrugarh', 'Jorhat', 'Tezpur', 'Silchar'];
+  const categories = ['All Categories', 'Primary', 'Secondary', 'Higher Secondary', 'College', 'University'];
+  
+  // Filter jobs to show only selectable ones if needed
+  const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    
+    if (!showOnlySelectable) return jobs;
+    return jobs.filter((job: any) => {
+      const isExternal = !!job.applicationLink;
+      const hasApplied = appliedJobIds.includes(job.id);
+      return !isExternal && !hasApplied;
+    });
+  }, [jobs, showOnlySelectable, appliedJobIds]);
+  
+  // Publish context when jobs or filters change
+  useEffect(() => {
+    // Skip if loading or no data available
+    if (isLoading || !jobs) return;
+    
+    try {
+      const visibleJobs = (filteredJobs || []).slice(0, 5).map((job: any) => ({
+        id: job.id,
+        title: job.title || 'Untitled Job',
+        organization: job.organization || 'Unknown Organization',
+        location: job.location,
+        category: job.category
+      }));
+      
+      const selection = selectedJobIds.size > 0 ? {
+        jobId: Array.from(selectedJobIds)[0] // First selected job ID
+      } : undefined;
+      
+      publishContext({
+        route: location,
+        page: 'Jobs',
+        selection,
+        visibleSummary: {
+          jobs: visibleJobs,
+          totalJobs: (filteredJobs || []).length,
+          filters: {
+            query: filters.search || undefined,
+            location: filters.location || undefined,
+            category: filters.category || undefined
+          }
+        }
+      });
+    } catch (error) {
+      console.debug('Failed to publish Jobs context:', error);
+    }
+  }, [location, filteredJobs, filters, selectedJobIds, publishContext, jobs, isLoading]);
   
   const applyMutation = useMutation({
     mutationFn: async ({ jobId, resumeUrl }: { jobId: number; resumeUrl?: string }) => {
@@ -139,18 +214,6 @@ export const Jobs: React.FC = () => {
     window.open(job.applicationLink, '_blank', 'noopener,noreferrer');
   };
   
-  const locations = ['All Locations', 'Guwahati', 'Dibrugarh', 'Jorhat', 'Tezpur', 'Silchar'];
-  const categories = ['All Categories', 'Primary', 'Secondary', 'Higher Secondary', 'College', 'University'];
-  
-  // Filter jobs to show only selectable ones if needed
-  const filteredJobs = useMemo(() => {
-    if (!showOnlySelectable) return jobs;
-    return jobs.filter((job: any) => {
-      const isExternal = !!job.applicationLink;
-      const hasApplied = appliedJobIds.includes(job.id);
-      return !isExternal && !hasApplied;
-    });
-  }, [jobs, showOnlySelectable, appliedJobIds]);
   
   // Get selected jobs details
   const selectedJobs = useMemo(() => {
