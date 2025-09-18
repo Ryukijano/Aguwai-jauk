@@ -24,7 +24,7 @@ const AIChatPopup = () => {
 
   const sendMessage = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", "/api/ai/agent-chat", { message });
+      const response = await apiRequest("POST", "/api/ai/chat", { message });
       return response.json();
     },
     onSuccess: () => {

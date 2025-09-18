@@ -31,7 +31,7 @@ export const AiAssistant: React.FC = () => {
   // Send message mutation
   const sendMessage = useMutation({
     mutationFn: async (content: string) => {
-      const response = await fetch('/api/ai/agent-chat', {
+      const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
