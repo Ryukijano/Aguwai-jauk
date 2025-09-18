@@ -17,6 +17,8 @@ import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { BulkApplyDialog } from '@/components/jobs/BulkApplyDialog';
 import { apiRequest } from '@/lib/queryClient';
+import JobCard from '@/components/jobs/JobCard';
+import { Target, TrendingUp, RefreshCw } from 'lucide-react';
 
 export const Jobs: React.FC = () => {
   const [location] = useLocation();
@@ -25,11 +27,14 @@ export const Jobs: React.FC = () => {
   const [filters, setFilters] = useState({
     search: '',
     location: '',
-    category: ''
+    category: '',
+    matchFilter: 'all' // all, best (>70%), good (>50%)
   });
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [showBulkApplyDialog, setShowBulkApplyDialog] = useState(false);
   const [showOnlySelectable, setShowOnlySelectable] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'match'>('date');
+  const [isRefreshingMatches, setIsRefreshingMatches] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,6 +75,13 @@ export const Jobs: React.FC = () => {
     enabled: isAuthenticated,
   });
   
+  // Fetch job matches for the user
+  const { data: jobMatches = [], isLoading: matchesLoading } = useQuery<any[]>({
+    queryKey: ['/api/resume/job-matches'],
+    enabled: isAuthenticated && !!defaultResume?.id,
+    retry: 1
+  });
+  
   // Check which jobs user has already applied to
   const { data: appliedJobIds = [] } = useQuery<number[]>({
     queryKey: ['/api/applications/check-existing', jobs?.map((j: any) => j.id)],
@@ -94,17 +106,93 @@ export const Jobs: React.FC = () => {
   const locations = ['All Locations', 'Guwahati', 'Dibrugarh', 'Jorhat', 'Tezpur', 'Silchar'];
   const categories = ['All Categories', 'Primary', 'Secondary', 'Higher Secondary', 'College', 'University'];
   
-  // Filter jobs to show only selectable ones if needed
+  const handleRefreshMatches = async () => {
+    if (!isAuthenticated || !defaultResume?.id) {
+      toast({
+        title: 'Upload Resume First',
+        description: 'Please upload a resume to get personalized job matches',
+        variant: 'default'
+      });
+      navigate('/profile');
+      return;
+    }
+    
+    setIsRefreshingMatches(true);
+    try {
+      const response = await apiRequest('POST', '/api/resume/job-matches/refresh');
+      const data = await response.json();
+      
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['/api/resume/job-matches'] });
+        toast({
+          title: 'Matches Updated',
+          description: `Found ${data.totalMatched} job matches based on your resume`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to refresh job matches',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsRefreshingMatches(false);
+    }
+  };
+  
+  // Create a map of job matches for quick lookup
+  const matchMap = useMemo(() => {
+    const map = new Map();
+    if (jobMatches && Array.isArray(jobMatches)) {
+      jobMatches.forEach((match: any) => {
+        const jobId = match.jobId || match.job_id || match.id;
+        map.set(jobId, {
+          score: match.matchScore || match.match_score,
+          level: match.recommendationLevel || match.recommendation_level
+        });
+      });
+    }
+    return map;
+  }, [jobMatches]);
+  
+  // Filter and sort jobs based on filters and matches
   const filteredJobs = useMemo(() => {
     if (!jobs) return [];
     
-    if (!showOnlySelectable) return jobs;
-    return jobs.filter((job: any) => {
-      const isExternal = !!job.applicationLink;
-      const hasApplied = appliedJobIds.includes(job.id);
-      return !isExternal && !hasApplied;
-    });
-  }, [jobs, showOnlySelectable, appliedJobIds]);
+    let filtered = [...jobs];
+    
+    // Apply selectable filter
+    if (showOnlySelectable) {
+      filtered = filtered.filter((job: any) => {
+        const isExternal = !!job.applicationLink;
+        const hasApplied = appliedJobIds.includes(job.id);
+        return !isExternal && !hasApplied;
+      });
+    }
+    
+    // Apply match score filter
+    if (filters.matchFilter !== 'all' && matchMap.size > 0) {
+      filtered = filtered.filter((job: any) => {
+        const match = matchMap.get(job.id);
+        if (!match) return filters.matchFilter === 'all';
+        
+        if (filters.matchFilter === 'best') return match.score >= 70;
+        if (filters.matchFilter === 'good') return match.score >= 50;
+        return true;
+      });
+    }
+    
+    // Sort by match score if requested
+    if (sortBy === 'match' && matchMap.size > 0) {
+      filtered.sort((a: any, b: any) => {
+        const matchA = matchMap.get(a.id)?.score || 0;
+        const matchB = matchMap.get(b.id)?.score || 0;
+        return matchB - matchA;
+      });
+    }
+    
+    return filtered;
+  }, [jobs, showOnlySelectable, appliedJobIds, filters.matchFilter, sortBy, matchMap]);
   
   // Publish context when jobs or filters change
   useEffect(() => {
@@ -365,6 +453,68 @@ export const Jobs: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Add Match Filter and Sort Options */}
+            {isAuthenticated && defaultResume?.id && (
+              <>
+                <Select
+                  value={filters.matchFilter}
+                  onValueChange={(value) => setFilters(prev => ({ 
+                    ...prev, 
+                    matchFilter: value 
+                  }))}
+                >
+                  <SelectTrigger className="md:col-span-1">
+                    <SelectValue placeholder="Match Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        All Jobs
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="best">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-green-500" />
+                        Best Matches (70%+)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="good">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-blue-500" />
+                        Good Matches (50%+)
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select
+                  value={sortBy}
+                  onValueChange={(value: 'date' | 'match') => setSortBy(value)}
+                >
+                  <SelectTrigger className="md:col-span-1">
+                    <SelectValue placeholder="Sort By" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Latest First
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="match">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Best Match First
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             <div className="md:col-span-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -414,18 +564,33 @@ export const Jobs: React.FC = () => {
         </CardContent>
       </Card>
       
-      {/* Job count and selection info */}
-      {!isLoading && isAuthenticated && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Showing {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''} 
-            {showOnlySelectable && ` (${selectableJobsCount} selectable)`}
-          </span>
-          {selectedJobIds.size > 0 && (
-            <span className="font-medium text-primary">
-              {selectedJobIds.size} job{selectedJobIds.size !== 1 ? 's' : ''} selected
-            </span>
+      {/* Match Refresh Button and Job Count */}
+      {!isLoading && (
+        <div className="flex items-center justify-between">
+          {isAuthenticated && defaultResume?.id && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshMatches}
+              disabled={isRefreshingMatches}
+              className="gap-2"
+              data-testid="button-refresh-matches"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshingMatches ? 'animate-spin' : ''}`} />
+              {isRefreshingMatches ? 'Updating...' : 'Update Match Scores'}
+            </Button>
           )}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''} 
+              {showOnlySelectable && ` (${selectableJobsCount} selectable)`}
+            </span>
+            {selectedJobIds.size > 0 && (
+              <span className="font-medium text-primary">
+                {selectedJobIds.size} job{selectedJobIds.size !== 1 ? 's' : ''} selected
+              </span>
+            )}
+          </div>
         </div>
       )}
       
@@ -451,11 +616,52 @@ export const Jobs: React.FC = () => {
         )}
         
         {filteredJobs.map((job: any) => {
+          const match = matchMap.get(job.id);
           const isExternal = !!job.applicationLink;
           const hasApplied = appliedJobIds.includes(job.id);
           const isSelectable = !isExternal && !hasApplied && isAuthenticated;
           const isSelected = selectedJobIds.has(job.id);
           
+          // Use JobCard component if we have match data
+          if (match) {
+            return (
+              <div key={job.id} className="relative">
+                {isAuthenticated && (
+                  <div className="absolute left-4 top-4 z-20">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleJobSelect(job.id, isSelectable)}
+                              disabled={!isSelectable}
+                              data-testid={`checkbox-job-${job.id}`}
+                              className={`${!isSelectable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {!isSelectable && (
+                          <TooltipContent>
+                            {hasApplied ? 'You have already applied to this job' : 
+                             isExternal ? 'Cannot bulk apply to external jobs' : 
+                             'Sign in to select jobs'}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+                <JobCard 
+                  job={job} 
+                  matchScore={match.score} 
+                  recommendationLevel={match.level}
+                />
+              </div>
+            );
+          }
+          
+          // Fallback to regular card rendering if no match data
           return (
           <Card 
             key={job.id} 

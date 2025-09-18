@@ -142,6 +142,35 @@ export class DatabaseStorage implements IStorage {
         console.log('Email preferences column might already exist:', err.message);
       });
       
+      // Create job_matches table if it doesn't exist
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS job_matches (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          job_id INTEGER NOT NULL REFERENCES job_listings(id) ON DELETE CASCADE,
+          resume_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+          match_score INTEGER NOT NULL,
+          match_reasons TEXT[],
+          missing_qualifications TEXT[],
+          strengths TEXT[],
+          recommendation_level TEXT NOT NULL,
+          match_data TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create index for faster lookups
+      await this.pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_job_matches_user_id 
+        ON job_matches(user_id)
+      `).catch(() => {});
+      
+      await this.pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_job_matches_user_job 
+        ON job_matches(user_id, job_id)
+      `).catch(() => {});
+      
       console.log('Database schema initialized successfully');
       
       // Insert sample data if no jobs exist
@@ -966,5 +995,73 @@ export class DatabaseStorage implements IStorage {
       [preferencesJson, userId]
     );
     return (result.rowCount ?? 0) > 0;
+  }
+  
+  // Job match methods
+  async saveJobMatches(userId: number, resumeId: number | null, matches: any[]): Promise<void> {
+    // Clear existing matches for this user
+    await this.clearUserJobMatches(userId);
+    
+    // Insert new matches
+    for (const match of matches) {
+      await this.pool.query(`
+        INSERT INTO job_matches (
+          user_id, job_id, resume_id, match_score, 
+          match_reasons, missing_qualifications, strengths,
+          recommendation_level, match_data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        userId,
+        match.jobId,
+        resumeId,
+        match.matchScore,
+        match.matchReasons,
+        match.missingQualifications,
+        match.strengths,
+        match.recommendationLevel,
+        JSON.stringify(match)
+      ]);
+    }
+  }
+  
+  async getJobMatches(userId: number): Promise<any[]> {
+    const result = await this.pool.query(`
+      SELECT jm.*, jl.title, jl.organization, jl.location, jl.description, jl.category, jl.application_deadline
+      FROM job_matches jm
+      JOIN job_listings jl ON jm.job_id = jl.id
+      WHERE jm.user_id = $1
+      ORDER BY jm.match_score DESC
+    `, [userId]);
+    
+    return result.rows.map(row => ({
+      ...row,
+      matchReasons: row.match_reasons || [],
+      missingQualifications: row.missing_qualifications || [],
+      strengths: row.strengths || []
+    }));
+  }
+  
+  async getJobMatchByUserAndJob(userId: number, jobId: number): Promise<any | null> {
+    const result = await this.pool.query(`
+      SELECT * FROM job_matches
+      WHERE user_id = $1 AND job_id = $2
+    `, [userId, jobId]);
+    
+    if (result.rows.length === 0) return null;
+    
+    const row = result.rows[0];
+    return {
+      ...row,
+      matchReasons: row.match_reasons || [],
+      missingQualifications: row.missing_qualifications || [],
+      strengths: row.strengths || []
+    };
+  }
+  
+  async clearUserJobMatches(userId: number): Promise<void> {
+    await this.pool.query(
+      'DELETE FROM job_matches WHERE user_id = $1',
+      [userId]
+    );
   }
 }

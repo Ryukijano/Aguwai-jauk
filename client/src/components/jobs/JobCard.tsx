@@ -7,7 +7,9 @@ import {
   Clock, 
   GraduationCap, 
   School, 
-  Languages 
+  Languages,
+  Target,
+  Sparkles
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,12 +17,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface JobCardProps {
   job: JobListing;
+  matchScore?: number;
+  recommendationLevel?: 'perfect' | 'strong' | 'moderate' | 'stretch';
 }
 
-const JobCard = ({ job }: JobCardProps) => {
+const JobCard = ({ job, matchScore, recommendationLevel }: JobCardProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -66,6 +72,24 @@ const JobCard = ({ job }: JobCardProps) => {
   };
 
   const deadlineStatus = getDeadlineStatus();
+  
+  const getMatchBadgeColor = () => {
+    if (!matchScore) return '';
+    if (matchScore >= 85) return 'bg-green-100 text-green-700 border-green-200';
+    if (matchScore >= 70) return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (matchScore >= 50) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+  
+  const getRecommendationText = () => {
+    switch (recommendationLevel) {
+      case 'perfect': return 'Perfect Match';
+      case 'strong': return 'Strong Match';
+      case 'moderate': return 'Good Match';
+      case 'stretch': return 'Worth Exploring';
+      default: return '';
+    }
+  };
 
   const handleApply = async () => {
     try {
@@ -99,14 +123,43 @@ const JobCard = ({ job }: JobCardProps) => {
   };
 
   return (
-    <div className="p-4 md:p-6 border-b border-gray-100 hover:bg-gray-50 transition">
+    <div className="p-4 md:p-6 border-b border-gray-100 hover:bg-gray-50 transition relative">
+      {matchScore && matchScore >= 70 && (
+        <div className="absolute -top-1 -right-1 z-10">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <div className="bg-gradient-to-r from-green-400 to-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg flex items-center gap-1">
+                  <Sparkles size={12} />
+                  {matchScore}% Match
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{getRecommendationText()}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between">
         <div className="flex items-start space-x-4">
           <div className={`p-3 rounded-lg ${getJobIconColor()}`}>
             {getJobIcon()}
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">{job.title}</h3>
+            <div className="flex items-start gap-2">
+              <h3 className="font-medium text-gray-900">{job.title}</h3>
+              {matchScore && (
+                <Badge 
+                  variant="outline" 
+                  className={`${getMatchBadgeColor()} text-xs px-2 py-0.5 flex items-center gap-1`}
+                  data-testid={`match-score-${job.id}`}
+                >
+                  <Target size={10} />
+                  {matchScore}%
+                </Badge>
+              )}
+            </div>
             <p className="text-gray-500 text-sm mt-1">{job.organization}</p>
             <div className="flex items-center mt-2 space-x-3 text-sm">
               <span className="flex items-center text-gray-500">

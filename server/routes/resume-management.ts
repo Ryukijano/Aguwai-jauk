@@ -9,6 +9,7 @@ import { IStorage } from '../storage';
 import type { Request, Response } from 'express';
 import type { User } from '@shared/schema';
 import { analyzeResumeWithAI, ResumeAnalysis } from '../services/resume-analysis-service';
+import { matchResumeToJobs } from '../services/job-matching-service';
 
 // Extend Express Request type for user
 declare module "express-serve-static-core" {
@@ -412,6 +413,197 @@ export default function createResumeManagementRoutes(storage: IStorage) {
     } catch (error) {
       console.error('Error fetching default resume:', error);
       res.status(500).json({ error: 'Failed to fetch default resume' });
+    }
+  });
+  
+  // Get job matches for user's default resume
+  router.get('/api/resume/job-matches', async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    try {
+      // Check if user has cached job matches
+      const cachedMatches = await storage.getJobMatches(req.user.id);
+      if (cachedMatches && cachedMatches.length > 0) {
+        // Check if cache is recent (within 24 hours)
+        const cacheAge = Date.now() - new Date(cachedMatches[0].created_at).getTime();
+        if (cacheAge < 24 * 60 * 60 * 1000) {
+          return res.json({
+            matches: cachedMatches,
+            cached: true
+          });
+        }
+      }
+      
+      // Get user's default resume
+      const resumes = await storage.getUserResumes(req.user.id);
+      const defaultResume = resumes.find(r => r.isDefault) || resumes[0];
+      
+      if (!defaultResume || !defaultResume.parsedData) {
+        return res.json({
+          matches: [],
+          message: 'Please upload a resume to get job matches'
+        });
+      }
+      
+      // Parse resume data to get AI analysis
+      let resumeAnalysis: ResumeAnalysis | null = null;
+      try {
+        const parsedData = JSON.parse(defaultResume.parsedData);
+        resumeAnalysis = parsedData.aiAnalysis;
+      } catch (e) {
+        console.error('Error parsing resume data:', e);
+        return res.json({
+          matches: [],
+          error: 'Resume analysis not available'
+        });
+      }
+      
+      if (!resumeAnalysis) {
+        return res.json({
+          matches: [],
+          message: 'Resume needs to be analyzed first'
+        });
+      }
+      
+      // Get all active jobs
+      const jobs = await storage.getJobListings({ });
+      const activeJobs = jobs.filter(j => j.isActive !== false);
+      
+      if (activeJobs.length === 0) {
+        return res.json({
+          matches: [],
+          message: 'No active jobs available'
+        });
+      }
+      
+      // Get user's location from profile
+      const user = await storage.getUserById(req.user.id);
+      const userLocation = user?.preferredLocations?.[0] || user?.address;
+      
+      // Perform matching
+      const matches = await matchResumeToJobs(
+        resumeAnalysis,
+        activeJobs,
+        userLocation
+      );
+      
+      // Save matches to database for caching
+      await storage.saveJobMatches(req.user.id, defaultResume.id, matches);
+      
+      // Return top matches
+      const topMatches = matches.slice(0, 20);
+      
+      res.json({
+        matches: topMatches,
+        totalJobs: activeJobs.length,
+        resumeId: defaultResume.id,
+        cached: false
+      });
+    } catch (error) {
+      console.error('Error generating job matches:', error);
+      res.status(500).json({ error: 'Failed to generate job matches' });
+    }
+  });
+  
+  // Force refresh job matches
+  router.post('/api/resume/job-matches/refresh', async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    try {
+      // Clear existing matches
+      await storage.clearUserJobMatches(req.user.id);
+      
+      // Get user's default resume
+      const resumes = await storage.getUserResumes(req.user.id);
+      const defaultResume = resumes.find(r => r.isDefault) || resumes[0];
+      
+      if (!defaultResume || !defaultResume.parsedData) {
+        return res.json({
+          success: false,
+          message: 'Please upload a resume to get job matches'
+        });
+      }
+      
+      // Parse resume data
+      let resumeAnalysis: ResumeAnalysis | null = null;
+      try {
+        const parsedData = JSON.parse(defaultResume.parsedData);
+        resumeAnalysis = parsedData.aiAnalysis;
+      } catch (e) {
+        return res.json({
+          success: false,
+          error: 'Resume analysis not available'
+        });
+      }
+      
+      if (!resumeAnalysis) {
+        return res.json({
+          success: false,
+          message: 'Resume needs to be analyzed first'
+        });
+      }
+      
+      // Get all active jobs and user location
+      const jobs = await storage.getJobListings({ });
+      const activeJobs = jobs.filter(j => j.isActive !== false);
+      const user = await storage.getUserById(req.user.id);
+      const userLocation = user?.preferredLocations?.[0] || user?.address;
+      
+      // Perform matching
+      const matches = await matchResumeToJobs(
+        resumeAnalysis,
+        activeJobs,
+        userLocation
+      );
+      
+      // Save new matches
+      await storage.saveJobMatches(req.user.id, defaultResume.id, matches);
+      
+      res.json({
+        success: true,
+        matches: matches.slice(0, 20),
+        totalMatched: matches.length
+      });
+    } catch (error) {
+      console.error('Error refreshing job matches:', error);
+      res.status(500).json({ error: 'Failed to refresh job matches' });
+    }
+  });
+  
+  // Get match score for specific jobs
+  router.post('/api/resume/job-matches/batch', async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const { jobIds } = req.body;
+    if (!Array.isArray(jobIds) || jobIds.length === 0) {
+      return res.status(400).json({ error: 'Job IDs array required' });
+    }
+    
+    try {
+      // Get cached matches for these specific jobs
+      const matches: any[] = [];
+      
+      for (const jobId of jobIds) {
+        const match = await storage.getJobMatchByUserAndJob(req.user.id, jobId);
+        if (match) {
+          matches.push({
+            jobId,
+            matchScore: match.match_score,
+            recommendationLevel: match.recommendation_level
+          });
+        }
+      }
+      
+      res.json({ matches });
+    } catch (error) {
+      console.error('Error fetching batch job matches:', error);
+      res.status(500).json({ error: 'Failed to fetch job matches' });
     }
   });
   

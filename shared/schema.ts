@@ -146,6 +146,22 @@ export const notifications = pgTable('notifications', {
   createdAt: timestamp('created_at').defaultNow()
 });
 
+// Job Matches table for storing resume-job match scores
+export const jobMatches = pgTable('job_matches', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  jobId: integer('job_id').notNull().references(() => jobListings.id, { onDelete: 'cascade' }),
+  resumeId: integer('resume_id').references(() => documents.id, { onDelete: 'cascade' }),
+  matchScore: integer('match_score').notNull(),
+  matchReasons: text('match_reasons').array(),
+  missingQualifications: text('missing_qualifications').array(),
+  strengths: text('strengths').array(),
+  recommendationLevel: text('recommendation_level').notNull(),
+  matchData: text('match_data'), // JSON string for detailed match analysis
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
 // Create schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertJobListingSchema = createInsertSchema(jobListings).omit({ id: true, createdAt: true, updatedAt: true });
@@ -157,6 +173,7 @@ export const insertSocialLinkSchema = createInsertSchema(socialLinks).omit({ id:
 export const insertJobExternalClickSchema = createInsertSchema(jobExternalClicks).omit({ id: true, clickedAt: true });
 export const insertApplicationStatusHistorySchema = createInsertSchema(applicationStatusHistory).omit({ id: true, changedAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, sentAt: true, createdAt: true });
+export const insertJobMatchSchema = createInsertSchema(jobMatches).omit({ id: true, createdAt: true, updatedAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -167,6 +184,7 @@ export type Event = typeof events.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type SocialLink = typeof socialLinks.$inferSelect;
 export type JobExternalClick = typeof jobExternalClicks.$inferSelect;
+export type JobMatch = typeof jobMatches.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertJobListing = z.infer<typeof insertJobListingSchema>;
@@ -176,12 +194,14 @@ export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type InsertSocialLink = z.infer<typeof insertSocialLinkSchema>;
 export type InsertJobExternalClick = z.infer<typeof insertJobExternalClickSchema>;
+export type InsertJobMatch = z.infer<typeof insertJobMatchSchema>;
 
 export type ApplicationStatusHistory = typeof applicationStatusHistory.$inferSelect;
 export type InsertApplicationStatusHistory = z.infer<typeof insertApplicationStatusHistorySchema>;
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
 
 // Resume-specific type extensions
 export interface Resume extends Document {

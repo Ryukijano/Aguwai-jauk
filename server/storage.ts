@@ -96,6 +96,12 @@ export interface IStorage {
   getUserEmailPreferences(userId: number): Promise<any>;
   updateUserEmailPreferences(userId: number, preferences: any): Promise<boolean>;
   
+  // Job match methods
+  saveJobMatches(userId: number, resumeId: number | null, matches: any[]): Promise<void>;
+  getJobMatches(userId: number): Promise<any[]>;
+  getJobMatchByUserAndJob(userId: number, jobId: number): Promise<any | null>;
+  clearUserJobMatches(userId: number): Promise<void>;
+  
   // Session store
   sessionStore: Express.SessionStore;
 }
