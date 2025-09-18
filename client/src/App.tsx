@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { Briefcase, Users, FileText, User, LogOut, Menu, X } from 'lucide-react';
+import { Briefcase, Users, FileText, Folder, User, LogOut, Menu, X } from 'lucide-react';
 
 // Contexts
 import { AIPageContextProvider } from '@/contexts/AIPageContext';
@@ -18,6 +18,7 @@ import { Jobs } from '@/pages/Jobs';
 import { JobDetails } from '@/pages/JobDetails';
 import { Applications } from '@/pages/Applications';
 import { ApplicationDetails } from '@/pages/ApplicationDetails';
+import Documents from '@/pages/Documents';
 import { Profile } from '@/pages/Profile';
 
 // Components
@@ -85,6 +86,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   Applications
                 </Button>
               </Link>
+              <Link href="/documents">
+                <Button variant={isActive('/documents') ? 'default' : 'ghost'} size="sm">
+                  <Folder className="h-4 w-4 mr-2" />
+                  Documents
+                </Button>
+              </Link>
               <Link href="/profile">
                 <Button variant={isActive('/profile') ? 'default' : 'ghost'} size="sm">
                   <User className="h-4 w-4 mr-2" />
@@ -141,6 +148,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   Applications
+                </Button>
+              </Link>
+              <Link href="/documents">
+                <Button
+                  variant={isActive('/documents') ? 'default' : 'ghost'}
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Folder className="h-4 w-4 mr-2" />
+                  Documents
                 </Button>
               </Link>
               <Link href="/profile">
@@ -215,6 +232,11 @@ const App = () => {
             <Route path="/applications">
               <Layout>
                 <Applications />
+              </Layout>
+            </Route>
+            <Route path="/documents">
+              <Layout>
+                <Documents />
               </Layout>
             </Route>
             <Route path="/profile">
