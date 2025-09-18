@@ -53,6 +53,37 @@ An AI-powered job portal specifically designed for teachers in Assam, featuring 
 
 ## Recent Changes
 
+### September 18, 2025 - Enhanced Resume Upload System with AI Analysis
+- **AI-Powered Resume Analysis**: Integrated Google Gemini AI directly into resume upload pipeline
+  - Comprehensive scoring (0-100) with qualification breakdown
+  - Intelligent skill extraction using NLP beyond keyword matching
+  - Teaching-specific analysis for Assam education system (TET, CTET, B.Ed focus)
+  - Career roadmap with immediate, short-term, and long-term recommendations
+- **Drag-and-Drop Upload Interface**: Modern UI with visual feedback
+  - Drag-and-drop zone with hover effects and file validation
+  - Real-time upload progress tracking with percentage display
+  - Animated loading states for upload and AI analysis phases
+- **AI Analysis Results Display**: Comprehensive results dialog showing
+  - Overall match score with circular progress indicator
+  - Qualification breakdown (Education, Experience, Certifications, Skills)
+  - Job match percentages for Government, Private, Central Schools
+  - Key strengths and areas for improvement with icons
+  - Recommendations organized by timeframe
+- **Intelligent Job Matching**: Automatic matching between resumes and job postings
+  - Weighted scoring algorithm (Skills 40%, Education 30%, Experience 20%, Location 10%)
+  - Semantic similarity understanding using Google Gemini AI
+  - Match scores displayed on job cards with color-coded badges
+  - "Best Matches" filter to show jobs with >70% match
+  - Dashboard "Recommended Jobs" section with top 5 matches
+- **Documents Page Integration**: Added Documents page to routing for resume management
+  - Accessible at /documents with navigation links
+  - Resume Management section with 5-resume limit per user
+  - Default resume selection functionality
+- **Performance & Resilience**: 
+  - 24-hour caching for AI analysis and job matches
+  - Graceful fallback to basic extraction if AI fails
+  - TypeScript error fixes and type safety improvements
+
 ### September 18, 2025 - Page-Aware Context System Implementation
 - **Page Context Publishing**: Implemented `useAIContextPublisher` hook across all pages
   - Each page publishes its route, content summary, filters, and selections
