@@ -314,49 +314,120 @@ export async function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // AI-powered job scraping endpoint
+  // Track scraping status
+  const scrapingStatus = {
+    isRunning: false,
+    startTime: 0,
+    lastCompletedTime: 0,
+    lastResult: null as any
+  };
+
+  // AI-powered job scraping endpoint (returns immediately)
   router.post("/api/jobs/ai-scrape", rateLimitConfigs.aiAgent, async (req, res) => {
-    const startTime = Date.now();
+    const forceRefresh = req.body?.forceRefresh === true;
     
-    try {
-      console.log('🤖 Starting AI-powered job scrape...');
-      
-      // Run both traditional and AI scrapers in parallel
-      const [rssResults, aiResults] = await Promise.all([
-        jobScraper.scrapeAllJobs().catch(err => {
-          console.error('RSS scraper error:', err);
-          return { error: err.message, jobs: [] };
-        }),
-        aiJobScraper.scrapeJobsWithAI().catch(err => {
-          console.error('AI scraper error:', err);
-          return [];
-        })
-      ]);
-      
-      const processingTime = Date.now() - startTime;
+    // Check if scraping is already running
+    if (scrapingStatus.isRunning) {
+      return res.status(202).json({
+        status: 'already_running',
+        message: 'Job scraping is already in progress',
+        startedAt: new Date(scrapingStatus.startTime).toISOString(),
+        estimatedCompletionSec: 30
+      });
+    }
+    
+    // Return cached results if available and fresh (< 5 minutes old)
+    if (!forceRefresh && scrapingStatus.lastResult && 
+        Date.now() - scrapingStatus.lastCompletedTime < 5 * 60 * 1000) {
+      return res.json({
+        status: 'cached',
+        message: 'Returning cached results',
+        ...scrapingStatus.lastResult,
+        cachedAt: new Date(scrapingStatus.lastCompletedTime).toISOString()
+      });
+    }
+    
+    // Start scraping in background
+    scrapingStatus.isRunning = true;
+    scrapingStatus.startTime = Date.now();
+    
+    // Run scrapers in background (don't await)
+    Promise.all([
+      jobScraper.scrapeAllJobs().catch(err => {
+        console.error('RSS scraper error:', err);
+        return { error: err.message, jobs: [] };
+      }),
+      aiJobScraper.scrapeJobsWithAI().catch(err => {
+        console.error('AI scraper error:', err);
+        return [];
+      })
+    ]).then(async ([rssResults, aiResults]) => {
+      const processingTime = Date.now() - scrapingStatus.startTime;
       const allJobs = await storage.getJobListings({});
       
-      res.json({ 
-        success: true, 
+      scrapingStatus.lastResult = {
+        success: true,
         message: 'AI-powered job scraping completed successfully',
         results: {
           totalJobs: allJobs.length,
           aiJobsFound: aiResults.length,
           rssJobsFound: Array.isArray(rssResults) ? rssResults.length : 0,
-          sources: ['RSS Feeds', 'OpenAI GPT', 'Google Gemini', 'Web Search'],
+          sources: ['RSS Feeds', 'Curated Sites', 'AI Synthesis'],
           aiProviders: ['OpenAI GPT-3.5', 'Google Gemini Pro'],
           processingTimeMs: processingTime,
           processingTimeSec: Math.round(processingTime / 1000)
         }
-      });
-    } catch (error: any) {
+      };
+      
+      scrapingStatus.isRunning = false;
+      scrapingStatus.lastCompletedTime = Date.now();
+      
+      console.log('✅ AI job scraping completed successfully');
+    }).catch(error => {
       console.error('Error in AI job scraping:', error);
-      res.status(500).json({ 
-        error: 'Failed to complete AI job scraping', 
-        message: error.message,
-        processingTimeMs: Date.now() - startTime
+      scrapingStatus.lastResult = {
+        success: false,
+        error: 'Failed to complete AI job scraping',
+        message: error.message
+      };
+      scrapingStatus.isRunning = false;
+      scrapingStatus.lastCompletedTime = Date.now();
+    });
+    
+    // Return immediate response
+    res.status(202).json({
+      status: 'started',
+      message: 'AI job scraping started in background',
+      startedAt: new Date(scrapingStatus.startTime).toISOString(),
+      estimatedCompletionSec: 30,
+      checkStatusUrl: '/api/jobs/ai-scrape-status'
+    });
+  });
+  
+  // Check AI scraping status
+  router.get("/api/jobs/ai-scrape-status", async (req, res) => {
+    if (scrapingStatus.isRunning) {
+      const elapsedSec = Math.round((Date.now() - scrapingStatus.startTime) / 1000);
+      return res.json({
+        status: 'running',
+        startedAt: new Date(scrapingStatus.startTime).toISOString(),
+        elapsedSec,
+        estimatedRemainingSec: Math.max(0, 30 - elapsedSec)
       });
     }
+    
+    if (scrapingStatus.lastResult) {
+      return res.json({
+        status: 'completed',
+        completedAt: new Date(scrapingStatus.lastCompletedTime).toISOString(),
+        ...scrapingStatus.lastResult
+      });
+    }
+    
+    res.json({
+      status: 'idle',
+      message: 'No scraping job has been run yet'
+    });
   });
 
   // AI-powered job search endpoint with custom parameters

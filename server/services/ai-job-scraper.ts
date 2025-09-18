@@ -213,17 +213,43 @@ export class AIJobScraperService {
         } else {
           console.log(`🔄 Fetching RSS feed: ${feed.name}`);
           
-          // Fetch using HTTP client
-          const response = await this.httpClient.get(feed.url);
-          const parsedFeed = await this.rssParser.parseString(response.data);
-          
-          // Cache the parsed feed
-          await this.cacheService.set(cacheKey, parsedFeed, {
-            ttl: feed.ttl,
-            url: feed.url
-          });
-          
-          feedData = parsedFeed;
+          try {
+            // Fetch using HTTP client with timeout
+            const response = await this.httpClient.get(feed.url, {
+              timeout: 15000, // 15 second timeout
+              headers: {
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                'User-Agent': 'Mozilla/5.0 (compatible; Teacher Portal RSS Reader)'
+              }
+            });
+            
+            // Sanitize XML before parsing
+            let xmlContent = response.data;
+            if (typeof xmlContent === 'string') {
+              // Fix common XML issues
+              xmlContent = xmlContent.replace(/&(?!(?:amp|lt|gt|quot|#39|#x[0-9a-fA-F]+|#[0-9]+);)/g, '&amp;');
+              xmlContent = xmlContent.replace(/<(?!\/?[a-zA-Z][a-zA-Z0-9-_]*(?:\s+[^>]*)?>)/g, '&lt;');
+              xmlContent = xmlContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+            }
+            
+            const parsedFeed = await this.rssParser.parseString(xmlContent);
+            
+            // Cache the parsed feed
+            await this.cacheService.set(cacheKey, parsedFeed, {
+              ttl: feed.ttl,
+              url: feed.url
+            });
+            
+            feedData = parsedFeed;
+          } catch (parseError: any) {
+            console.error(`Error parsing RSS feed ${feed.name}:`, parseError.message);
+            // Cache the error to avoid retrying too frequently
+            await this.cacheService.set(cacheKey, { error: true, message: parseError.message }, {
+              ttl: 3600000, // Cache errors for 1 hour
+              url: feed.url
+            });
+            continue;
+          }
         }
         
         // Extract jobs from feed items
@@ -235,8 +261,8 @@ export class AIJobScraperService {
             }
           }
         }
-      } catch (error) {
-        console.error(`Error fetching RSS feed ${feed.name}:`, error);
+      } catch (error: any) {
+        console.error(`Error processing RSS feed ${feed.name}:`, error.message || error);
       }
     }
     
