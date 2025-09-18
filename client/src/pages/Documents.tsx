@@ -52,9 +52,11 @@ import { format, parseISO } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Star, StarOff } from "lucide-react";
 
 const Documents = () => {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isResumeUploadDialogOpen, setIsResumeUploadDialogOpen] = useState(false);
   const [isGoogleDriveDialogOpen, setIsGoogleDriveDialogOpen] = useState(false);
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
     isOpen: boolean;
@@ -63,11 +65,21 @@ const Documents = () => {
   const [category, setCategory] = useState("All");
   const [uploadCategory, setUploadCategory] = useState("Resume");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedResumeFile, setSelectedResumeFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resumeFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const { data: documents, isLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
+  });
+  
+  const { data: resumesData, isLoading: isLoadingResumes } = useQuery<{
+    resumes: Document[];
+    count: number;
+    limit: number;
+  }>({
+    queryKey: ["/api/documents/resumes"],
   });
 
   // Filter documents by category
@@ -180,6 +192,84 @@ const Documents = () => {
     }
   };
 
+  // Upload resume mutation
+  const uploadResume = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/documents/resume", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to upload resume");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/resumes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      setIsResumeUploadDialogOpen(false);
+      setSelectedResumeFile(null);
+      toast({
+        title: "Resume uploaded",
+        description: "Your resume has been uploaded successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Set default resume mutation
+  const setDefaultResume = useMutation({
+    mutationFn: async (documentId: number) => {
+      await apiRequest("PATCH", `/api/documents/${documentId}/default`, undefined);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/resumes"] });
+      toast({
+        title: "Default resume updated",
+        description: "Your default resume has been updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update failed",
+        description: "Failed to update default resume. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const handleResumeUpload = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedResumeFile) {
+      toast({
+        title: "No file selected",
+        description: "Please select a resume file to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", selectedResumeFile);
+
+    uploadResume.mutate(formData);
+  };
+  
+  const handleSetDefault = (resumeId: number) => {
+    setDefaultResume.mutate(resumeId);
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -206,6 +296,128 @@ const Documents = () => {
           </div>
         </div>
 
+        {/* Resume Management Section */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-heading font-semibold text-gray-800">
+                  Resume Management
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Upload and manage your resumes for job applications (Max 5 resumes)
+                </p>
+              </div>
+              <Button 
+                onClick={() => setIsResumeUploadDialogOpen(true)}
+                disabled={resumesData && resumesData.count >= resumesData.limit}
+              >
+                <Upload size={16} className="mr-2" /> Upload Resume
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {isLoadingResumes ? (
+              <div className="text-center py-8">
+                <FileText
+                  className="inline-block animate-pulse text-primary-500 mb-4"
+                  size={40}
+                />
+                <p>Loading resumes...</p>
+              </div>
+            ) : !resumesData || resumesData.resumes.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <FileText className="inline-block mb-4" size={40} />
+                <p className="mb-2">No resumes uploaded yet</p>
+                <Button
+                  variant="link"
+                  onClick={() => setIsResumeUploadDialogOpen(true)}
+                >
+                  Upload your first resume
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {resumesData.resumes.map((resume) => (
+                  <div
+                    key={resume.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FileText size={24} className="text-blue-500" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-800">
+                            {resume.name}
+                          </p>
+                          {resume.isDefault && (
+                            <Badge className="bg-green-100 text-green-700">
+                              <Star size={12} className="mr-1" />
+                              Default
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Uploaded {format(new Date(resume.uploadedAt), "MMM d, yyyy")}
+                          {resume.size && ` • ${(resume.size / 1024).toFixed(1)} KB`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {!resume.isDefault && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSetDefault(resume.id)}
+                          disabled={setDefaultResume.isPending}
+                        >
+                          <StarOff size={14} className="mr-1" />
+                          Set Default
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        asChild
+                      >
+                        <a
+                          href={resume.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Download size={16} />
+                        </a>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          setDeleteConfirmDialog({
+                            isOpen: true,
+                            documentId: resume.id,
+                          })
+                        }
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {resumesData.count >= resumesData.limit && (
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      You've reached the maximum limit of {resumesData.limit} resumes.
+                      Delete an existing resume to upload a new one.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Other Documents Section */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-100">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -488,6 +700,101 @@ const Documents = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resume Upload Dialog */}
+      <Dialog open={isResumeUploadDialogOpen} onOpenChange={setIsResumeUploadDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Resume</DialogTitle>
+            <DialogDescription>
+              Upload your resume in PDF or DOCX format (max 2MB)
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResumeUpload} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="resumeFile">Resume File</Label>
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                <input
+                  id="resumeFile"
+                  type="file"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      setSelectedResumeFile(e.target.files[0]);
+                    }
+                  }}
+                  ref={resumeFileInputRef}
+                  className="hidden"
+                  accept=".pdf,.docx,.doc"
+                />
+
+                {selectedResumeFile ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center">
+                      <FileText size={36} className="text-primary-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        {selectedResumeFile.name}
+                      </p>
+                      <p className="text-gray-500 text-sm">
+                        {(selectedResumeFile.size / 1024).toFixed(2)} KB
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => resumeFileInputRef.current?.click()}
+                    >
+                      Change File
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center">
+                      <Upload size={36} className="text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        Click to upload or drag and drop
+                      </p>
+                      <p className="text-gray-500 text-sm">
+                        PDF or DOCX files only (max 2MB)
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => resumeFileInputRef.current?.click()}
+                    >
+                      Select Resume
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsResumeUploadDialogOpen(false);
+                  setSelectedResumeFile(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!selectedResumeFile || uploadResume.isPending}
+              >
+                {uploadResume.isPending ? "Uploading..." : "Upload Resume"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

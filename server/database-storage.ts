@@ -15,7 +15,13 @@ import {
   type Event, 
   type InsertEvent, 
   type ChatMessage, 
-  type InsertChatMessage
+  type InsertChatMessage,
+  type JobExternalClick,
+  type InsertJobExternalClick,
+  type ApplicationStatusHistory,
+  type InsertApplicationStatusHistory,
+  type Notification,
+  type InsertNotification
 } from "@shared/schema";
 import { IStorage } from "./storage";
 
@@ -54,6 +60,87 @@ export class DatabaseStorage implements IStorage {
       
       const schema = await fs.readFile(schemaPath, 'utf-8');
       await this.pool.query(schema);
+      
+      // Create job_external_clicks table if it doesn't exist
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS job_external_clicks (
+          id SERIAL PRIMARY KEY,
+          job_id INTEGER NOT NULL REFERENCES job_listings(id),
+          user_id INTEGER REFERENCES users(id),
+          clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create application_status_history table if it doesn't exist
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS application_status_history (
+          id SERIAL PRIMARY KEY,
+          application_id INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          note TEXT,
+          changed_by INTEGER REFERENCES users(id),
+          changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Normalize existing application statuses
+      await this.pool.query(`
+        UPDATE applications
+        SET status = CASE
+          WHEN LOWER(status) = 'pending' THEN 'pending'
+          WHEN LOWER(status) = 'applied' THEN 'pending'
+          WHEN LOWER(status) = 'interview' THEN 'shortlisted'
+          WHEN LOWER(status) = 'shortlisted' THEN 'shortlisted'
+          WHEN LOWER(status) = 'rejected' THEN 'rejected'
+          WHEN LOWER(status) = 'accepted' THEN 'accepted'
+          ELSE 'pending'
+        END
+      `);
+      
+      // Create initial status history for existing applications
+      await this.pool.query(`
+        INSERT INTO application_status_history (application_id, status, note)
+        SELECT id, status, 'Initial status' FROM applications
+        WHERE NOT EXISTS (
+          SELECT 1 FROM application_status_history 
+          WHERE application_id = applications.id
+        )
+      `);
+      
+      // Add new columns to documents table if they don't exist
+      await this.pool.query(`
+        ALTER TABLE documents 
+        ADD COLUMN IF NOT EXISTS mime_type TEXT,
+        ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS parsed_data TEXT
+      `).catch(err => {
+        console.log('Documents table columns might already exist:', err.message);
+      });
+      
+      // Create notifications table if it doesn't exist
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          type TEXT NOT NULL,
+          recipient TEXT NOT NULL,
+          subject TEXT,
+          payload TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          sent_at TIMESTAMP,
+          error TEXT,
+          attempts INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Add email_preferences column to users table if it doesn't exist
+      await this.pool.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS email_preferences TEXT
+      `).catch(err => {
+        console.log('Email preferences column might already exist:', err.message);
+      });
       
       console.log('Database schema initialized successfully');
       
@@ -410,6 +497,74 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0] || null;
   }
 
+  // Bulk application methods
+  async bulkCreateApplications(applications: InsertApplication[]): Promise<{
+    successes: Application[];
+    failures: Array<{ jobId: number; error: string }>;
+    skipped: Array<{ jobId: number; reason: string }>;
+  }> {
+    const successes: Application[] = [];
+    const failures: Array<{ jobId: number; error: string }> = [];
+    const skipped: Array<{ jobId: number; reason: string }> = [];
+
+    for (const app of applications) {
+      try {
+        // Check if already applied
+        const existing = await this.getApplicationByUserAndJob(app.userId, app.jobId);
+        if (existing) {
+          skipped.push({ jobId: app.jobId, reason: 'Already applied to this job' });
+          continue;
+        }
+
+        // Check if job exists and is active
+        const job = await this.getJobListing(app.jobId);
+        if (!job) {
+          failures.push({ jobId: app.jobId, error: 'Job not found' });
+          continue;
+        }
+        
+        if (!job.isActive) {
+          failures.push({ jobId: app.jobId, error: 'Job is no longer active' });
+          continue;
+        }
+
+        // Check if it's an external job (should not allow bulk apply)
+        if (job.applicationLink) {
+          failures.push({ jobId: app.jobId, error: 'Cannot bulk apply to external jobs' });
+          continue;
+        }
+
+        // Create the application
+        const created = await this.createApplication(app);
+        successes.push(created);
+        
+        // Add a small delay for rate limiting (100ms between applications)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error: any) {
+        failures.push({ jobId: app.jobId, error: error.message || 'Failed to create application' });
+      }
+    }
+
+    return { successes, failures, skipped };
+  }
+
+  async checkExistingApplications(userId: number, jobIds: number[]): Promise<number[]> {
+    if (jobIds.length === 0) return [];
+    
+    try {
+      const result = await this.pool.query(`
+        SELECT job_id FROM applications 
+        WHERE user_id = $1 AND job_id = ANY($2::int[])
+      `, [userId, jobIds]);
+      
+      return result.rows.map(row => row.job_id);
+    } catch (error) {
+      console.error('Failed to check existing applications:', error);
+      throw error;
+    }
+  }
+
   // Social link operations (implement IStorage interface)
   async getSocialLinks(userId: number): Promise<SocialLink[]> {
     const result = await this.pool.query('SELECT * FROM social_links WHERE user_id = $1', [userId]);
@@ -453,15 +608,69 @@ export class DatabaseStorage implements IStorage {
 
   // Document operations (implement IStorage interface)
   async getDocuments(userId: number): Promise<Document[]> {
-    const result = await this.pool.query('SELECT * FROM documents WHERE user_id = $1', [userId]);
-    return result.rows;
+    const result = await this.pool.query('SELECT * FROM documents WHERE user_id = $1 ORDER BY uploaded_at DESC', [userId]);
+    return result.rows.map(this.mapDocument);
+  }
+  
+  async getDocumentById(id: number): Promise<Document | null> {
+    const result = await this.pool.query('SELECT * FROM documents WHERE id = $1', [id]);
+    return result.rows.length > 0 ? this.mapDocument(result.rows[0]) : null;
+  }
+  
+  async getUserResumes(userId: number): Promise<Document[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM documents 
+       WHERE user_id = $1 AND LOWER(type) = 'resume' 
+       ORDER BY is_default DESC, uploaded_at DESC`,
+      [userId]
+    );
+    return result.rows.map(this.mapDocument);
+  }
+  
+  async setDefaultResume(userId: number, documentId: number): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // First, unset all default resumes for this user
+      await client.query(
+        `UPDATE documents SET is_default = FALSE 
+         WHERE user_id = $1 AND LOWER(type) = 'resume'`,
+        [userId]
+      );
+      
+      // Then set the selected one as default
+      const result = await client.query(
+        `UPDATE documents SET is_default = TRUE 
+         WHERE id = $1 AND user_id = $2 AND LOWER(type) = 'resume'
+         RETURNING id`,
+        [documentId, userId]
+      );
+      
+      await client.query('COMMIT');
+      return result.rows.length > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
-    const { userId, type, name, url, size } = document;
+    const { userId, type, name, url, size, mimeType, parsedData } = document;
     const result = await this.pool.query(
-      'INSERT INTO documents (user_id, type, name, url, size) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [userId, type, name, url, size]
+      `INSERT INTO documents (user_id, type, name, url, size, mime_type, parsed_data) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        userId, 
+        type, 
+        name, 
+        url, 
+        size,
+        mimeType || null,
+        parsedData || null
+      ]
     );
     return result.rows[0];
   }
@@ -489,6 +698,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<boolean> {
     const result = await this.pool.query('DELETE FROM documents WHERE id = $1', [id]);
+    return (result.rowCount ?? 0) > 0;
+  }
+  
+  async deleteUserDocument(userId: number, documentId: number): Promise<boolean> {
+    const result = await this.pool.query(
+      'DELETE FROM documents WHERE id = $1 AND user_id = $2',
+      [documentId, userId]
+    );
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -560,5 +777,194 @@ export class DatabaseStorage implements IStorage {
       [userId, sessionId, content, isFromUser, metadata]
     );
     return result.rows[0];
+  }
+
+  // Helper methods
+  private mapDocument(row: any): Document {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      type: row.type,
+      name: row.name,
+      url: row.url,
+      size: row.size,
+      mimeType: row.mime_type,
+      isDefault: row.is_default,
+      parsedData: row.parsed_data,
+      uploadedAt: row.uploaded_at
+    };
+  }
+  
+  // Job external click tracking
+  async trackJobExternalClick(click: InsertJobExternalClick): Promise<JobExternalClick> {
+    const { jobId, userId } = click;
+    const result = await this.pool.query(
+      'INSERT INTO job_external_clicks (job_id, user_id) VALUES ($1, $2) RETURNING *',
+      [jobId, userId]
+    );
+    return result.rows[0];
+  }
+
+  async getJobExternalClicks(jobId: number): Promise<JobExternalClick[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM job_external_clicks WHERE job_id = $1 ORDER BY clicked_at DESC',
+      [jobId]
+    );
+    return result.rows;
+  }
+  
+  // Application status history methods
+  async createStatusHistory(history: InsertApplicationStatusHistory): Promise<ApplicationStatusHistory> {
+    const { applicationId, status, note, changedBy } = history;
+    const result = await this.pool.query(
+      'INSERT INTO application_status_history (application_id, status, note, changed_by) VALUES ($1, $2, $3, $4) RETURNING *',
+      [applicationId, status, note, changedBy]
+    );
+    return result.rows[0];
+  }
+  
+  async getApplicationStatusHistory(applicationId: number): Promise<ApplicationStatusHistory[]> {
+    const result = await this.pool.query(
+      `SELECT ash.*, u.username, u.full_name 
+       FROM application_status_history ash
+       LEFT JOIN users u ON ash.changed_by = u.id
+       WHERE ash.application_id = $1 
+       ORDER BY ash.changed_at DESC`,
+      [applicationId]
+    );
+    return result.rows.map(row => ({
+      id: row.id,
+      applicationId: row.application_id,
+      status: row.status,
+      note: row.note,
+      changedBy: row.changed_by,
+      changedAt: row.changed_at,
+      changedByName: row.full_name || row.username
+    }));
+  }
+  
+  async updateApplicationStatus(applicationId: number, status: string, userId?: number, note?: string): Promise<Application | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Update the application status
+      const updateResult = await client.query(
+        'UPDATE applications SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+        [status, applicationId]
+      );
+      
+      if (updateResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      
+      // Create status history entry
+      await client.query(
+        'INSERT INTO application_status_history (application_id, status, note, changed_by) VALUES ($1, $2, $3, $4)',
+        [applicationId, status, note, userId]
+      );
+      
+      await client.query('COMMIT');
+      return updateResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  
+  // Notification methods
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const { userId, type, recipient, subject, payload, status, error, attempts } = notification;
+    const result = await this.pool.query(
+      'INSERT INTO notifications (user_id, type, recipient, subject, payload, status, error, attempts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [userId, type, recipient, subject, payload, status || 'pending', error, attempts || 0]
+    );
+    return result.rows[0];
+  }
+  
+  async getNotifications(userId: number): Promise<Notification[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    return result.rows;
+  }
+  
+  async updateNotificationStatus(id: number, status: string, sentAt?: Date, error?: string): Promise<Notification | null> {
+    const fields = ['status = $2'];
+    const values = [id, status];
+    let index = 3;
+    
+    if (sentAt) {
+      fields.push(`sent_at = $${index}`);
+      values.push(sentAt);
+      index++;
+    }
+    
+    if (error !== undefined) {
+      fields.push(`error = $${index}`);
+      values.push(error);
+      index++;
+    }
+    
+    // Increment attempts if it's a failure
+    if (status === 'failed') {
+      fields.push('attempts = attempts + 1');
+    }
+    
+    const query = `UPDATE notifications SET ${fields.join(', ')} WHERE id = $1 RETURNING *`;
+    const result = await this.pool.query(query, values);
+    return result.rows[0] || null;
+  }
+  
+  // Email preferences methods
+  async getUserEmailPreferences(userId: number): Promise<any> {
+    const result = await this.pool.query(
+      'SELECT email_preferences FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const preferences = result.rows[0].email_preferences;
+    
+    // Return parsed preferences or default if not set
+    if (preferences) {
+      try {
+        return JSON.parse(preferences);
+      } catch (e) {
+        console.error('Failed to parse email preferences:', e);
+        return {
+          applicationUpdates: true,
+          jobAlerts: true,
+          interviewReminders: true,
+          weeklyDigest: false,
+          marketingEmails: false
+        };
+      }
+    }
+    
+    // Return default preferences if none set
+    return {
+      applicationUpdates: true,
+      jobAlerts: true,
+      interviewReminders: true,
+      weeklyDigest: false,
+      marketingEmails: false
+    };
+  }
+  
+  async updateUserEmailPreferences(userId: number, preferences: any): Promise<boolean> {
+    const preferencesJson = JSON.stringify(preferences);
+    const result = await this.pool.query(
+      'UPDATE users SET email_preferences = $1 WHERE id = $2',
+      [preferencesJson, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 }

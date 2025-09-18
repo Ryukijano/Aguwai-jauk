@@ -14,6 +14,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { Jobs } from '@/pages/Jobs';
 import { JobDetails } from '@/pages/JobDetails';
 import { Applications } from '@/pages/Applications';
+import { ApplicationDetails } from '@/pages/ApplicationDetails';
 import { Profile } from '@/pages/Profile';
 
 // Components
@@ -76,7 +77,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </Button>
               </Link>
               <Link href="/applications">
-                <Button variant={isActive('/applications') ? 'default' : 'ghost'} size="sm">
+                <Button variant={isActive('/applications') || location.startsWith('/applications/') ? 'default' : 'ghost'} size="sm">
                   <FileText className="h-4 w-4 mr-2" />
                   Applications
                 </Button>
@@ -200,6 +201,11 @@ const App = () => {
           <Route path="/jobs">
             <Layout>
               <Jobs />
+            </Layout>
+          </Route>
+          <Route path="/applications/:id">
+            <Layout>
+              <ApplicationDetails />
             </Layout>
           </Route>
           <Route path="/applications">

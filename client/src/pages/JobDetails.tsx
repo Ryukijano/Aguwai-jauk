@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Calendar, Briefcase, Building, Clock, ChevronLeft, ExternalLink } from 'lucide-react';
+import { MapPin, Calendar, Briefcase, Building, Clock, ChevronLeft, ExternalLink, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,7 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import type { JobListing } from '@shared/schema';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { JobListing, Document } from '@shared/schema';
 
 export const JobDetails: React.FC = () => {
   const { id } = useParams();
@@ -23,6 +24,9 @@ export const JobDetails: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [showApplyDialog, setShowApplyDialog] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
+  const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [uploadNewResume, setUploadNewResume] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   const { data: job, isLoading } = useQuery<JobListing>({
     queryKey: [`/api/jobs/${id}`],
@@ -34,8 +38,26 @@ export const JobDetails: React.FC = () => {
     enabled: !!id && isAuthenticated,
   });
 
+  const { data: userResumes } = useQuery<{
+    resumes: Document[];
+    count: number;
+    limit: number;
+  }>({
+    queryKey: ['/api/documents/resumes'],
+    enabled: isAuthenticated && showApplyDialog,
+  });
+
+  const { data: defaultResume } = useQuery<{
+    id: number | null;
+    name: string | null;
+    url: string | null;
+  }>({
+    queryKey: ['/api/documents/default-resume'],
+    enabled: isAuthenticated && showApplyDialog,
+  });
+
   const applyMutation = useMutation({
-    mutationFn: async (data: { jobId: number; coverLetter: string }) => {
+    mutationFn: async (data: { jobId: number; coverLetter: string; resumeUrl?: string }) => {
       const response = await fetch('/api/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,12 +99,70 @@ export const JobDetails: React.FC = () => {
       navigate('/login');
       return;
     }
+    // Set default resume if available
+    if (defaultResume?.id) {
+      setSelectedResumeId(defaultResume.id);
+    }
     setShowApplyDialog(true);
   };
 
-  const submitApplication = () => {
+  const handleExternalApply = async () => {
     if (!job) return;
-    applyMutation.mutate({ jobId: job.id, coverLetter });
+    
+    // Track the external click
+    try {
+      await fetch(`/api/jobs/${job.id}/external-click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Failed to track external click:', error);
+    }
+    
+    // Open the external link in a new tab
+    window.open(job.applicationLink!, '_blank', 'noopener,noreferrer');
+  };
+
+  const submitApplication = async () => {
+    if (!job) return;
+    
+    let resumeUrl: string | undefined;
+    
+    // Handle new resume upload if selected
+    if (uploadNewResume && resumeFile) {
+      const formData = new FormData();
+      formData.append('file', resumeFile);
+      
+      try {
+        const response = await fetch('/api/documents/resume', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to upload resume');
+        }
+        
+        const result = await response.json();
+        resumeUrl = result.document.url;
+      } catch (error) {
+        toast({
+          title: 'Resume upload failed',
+          description: error instanceof Error ? error.message : 'Failed to upload resume',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else if (selectedResumeId) {
+      // Get the URL of the selected resume
+      const selectedResume = userResumes?.resumes.find(r => r.id === selectedResumeId);
+      resumeUrl = selectedResume?.url;
+    }
+    
+    applyMutation.mutate({ jobId: job.id, coverLetter, resumeUrl });
   };
 
   if (isLoading) {
@@ -247,6 +327,23 @@ export const JobDetails: React.FC = () => {
             </>
           )}
 
+          {/* External application notice */}
+          {job.applicationLink && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    External Application
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    This position requires application through an external website. You will be redirected to the employer's application portal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Apply Button */}
           <div className="pt-4">
             {hasApplied ? (
@@ -254,12 +351,24 @@ export const JobDetails: React.FC = () => {
                 <Clock className="h-5 w-5" />
                 <span className="font-medium">You have already applied for this position</span>
               </div>
+            ) : job.applicationLink ? (
+              <Button 
+                size="lg" 
+                className="w-full md:w-auto flex items-center gap-2"
+                onClick={handleExternalApply}
+                variant="secondary"
+                data-testid="button-external-apply"
+              >
+                Apply on External Site
+                <ExternalLink className="h-4 w-4" />
+              </Button>
             ) : (
               <Button 
                 size="lg" 
                 className="w-full md:w-auto"
                 onClick={handleApply}
                 disabled={applyMutation.isPending}
+                data-testid="button-apply"
               >
                 {applyMutation.isPending ? 'Submitting...' : 'Apply for this Position'}
               </Button>
@@ -279,6 +388,68 @@ export const JobDetails: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label htmlFor="resume">Resume</Label>
+              <Select
+                value={uploadNewResume ? 'upload' : selectedResumeId?.toString() || ''}
+                onValueChange={(value) => {
+                  if (value === 'upload') {
+                    setUploadNewResume(true);
+                    setSelectedResumeId(null);
+                  } else {
+                    setUploadNewResume(false);
+                    setSelectedResumeId(parseInt(value));
+                  }
+                }}
+              >
+                <SelectTrigger id="resume" className="w-full">
+                  <SelectValue placeholder="Select a resume" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userResumes?.resumes.map((resume) => (
+                    <SelectItem key={resume.id} value={resume.id.toString()}>
+                      {resume.name}
+                      {resume.isDefault && ' (Default)'}
+                    </SelectItem>
+                  ))}
+                  {(!userResumes?.resumes.length || userResumes.resumes.length < userResumes.limit) && (
+                    <SelectItem value="upload">Upload new resume</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              
+              {uploadNewResume && (
+                <div className="mt-3 p-3 border border-dashed rounded-lg">
+                  <Label htmlFor="resumeFile">Upload Resume (PDF or DOCX, max 2MB)</Label>
+                  <input
+                    id="resumeFile"
+                    type="file"
+                    accept=".pdf,.docx,.doc"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast({
+                            title: 'File too large',
+                            description: 'Resume must be less than 2MB',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        setResumeFile(file);
+                      }
+                    }}
+                    className="mt-2 w-full"
+                  />
+                  {resumeFile && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Selected: {resumeFile.name}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="coverLetter">Cover Letter (Optional)</Label>
               <Textarea
                 id="coverLetter"
@@ -289,14 +460,26 @@ export const JobDetails: React.FC = () => {
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              Your profile information and resume will be included with your application.
+              Your profile information will be included with your application.
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowApplyDialog(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowApplyDialog(false);
+                setCoverLetter('');
+                setSelectedResumeId(null);
+                setUploadNewResume(false);
+                setResumeFile(null);
+              }}
+            >
               Cancel
             </Button>
-            <Button onClick={submitApplication} disabled={applyMutation.isPending}>
+            <Button 
+              onClick={submitApplication} 
+              disabled={applyMutation.isPending || (!selectedResumeId && !resumeFile)}
+            >
               {applyMutation.isPending ? 'Submitting...' : 'Submit Application'}
             </Button>
           </DialogFooter>

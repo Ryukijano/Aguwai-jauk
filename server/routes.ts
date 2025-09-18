@@ -17,9 +17,11 @@ import vectorSearchRoutes from "./routes/vector-search";
 import aiRoutes from "./routes/ai";
 // import langchainRoutes from "./routes/langchain"; // temporarily disabled
 import resumeRoutes from "./routes/resume";
+import createResumeManagementRoutes from "./routes/resume-management";
 import { JobScraperService } from "./services/job-scraper";
 import { AIJobScraperService } from "./services/ai-job-scraper";
 import { JobTemplateGenerator } from "./services/job-template-generator";
+import { emailService, EmailTemplateType } from "./services/email-service";
 
 // Initialize AI clients
 const openai = new OpenAI({
@@ -290,6 +292,32 @@ export async function setupRoutes(app: Express, storage: IStorage) {
       res.json(job);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Track external application clicks
+  router.post("/api/jobs/:id/external-click", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      
+      // Verify job exists and has an external link
+      const job = await storage.getJobListing(jobId);
+      if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      
+      if (!job.applicationLink) {
+        return res.status(400).json({ error: 'Job does not have an external application link' });
+      }
+      
+      // Track the click - userId can be null for anonymous users
+      const userId = req.user?.id || null;
+      const click = await storage.trackJobExternalClick({ jobId, userId });
+      
+      res.json({ success: true, click });
+    } catch (error) {
+      console.error('Failed to track external click:', error);
+      res.status(500).json({ error: 'Failed to track click' });
     }
   });
 
@@ -583,6 +611,127 @@ export async function setupRoutes(app: Express, storage: IStorage) {
     }
   });
 
+  // Check which jobs user has already applied to
+  router.post("/api/applications/check-existing", requireAuth, async (req, res) => {
+    try {
+      const { jobIds } = req.body;
+      
+      if (!jobIds || !Array.isArray(jobIds)) {
+        return res.status(400).json({ error: 'Job IDs must be provided as an array' });
+      }
+      
+      const appliedJobIds = await storage.checkExistingApplications(req.user!.id, jobIds);
+      res.json({ appliedJobIds });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bulk application endpoint
+  router.post("/api/applications/bulk", requireAuth, rateLimitConfigs.api, async (req, res) => {
+    try {
+      const { jobIds, resumeId, coverLetter } = req.body;
+      
+      // Validate input
+      if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+        return res.status(400).json({ error: 'Job IDs are required and must be a non-empty array' });
+      }
+      
+      if (jobIds.length > 10) {
+        return res.status(400).json({ error: 'Maximum 10 jobs can be applied to at once' });
+      }
+      
+      // Get user's default resume if resumeId not provided
+      let resumeUrl: string | null = null;
+      if (resumeId) {
+        const resume = await storage.getDocumentById(resumeId);
+        if (!resume || resume.userId !== req.user!.id) {
+          return res.status(404).json({ error: 'Resume not found' });
+        }
+        resumeUrl = resume.url;
+      } else {
+        // Get default resume
+        const resumes = await storage.getUserResumes(req.user!.id);
+        const defaultResume = resumes.find(r => r.isDefault);
+        if (defaultResume) {
+          resumeUrl = defaultResume.url;
+        }
+      }
+      
+      // Prepare applications
+      const applications: InsertApplication[] = jobIds.map(jobId => ({
+        userId: req.user!.id,
+        jobId: parseInt(jobId),
+        status: 'pending',
+        coverLetter: coverLetter || null,
+        resumeUrl: resumeUrl,
+        interviewDate: null,
+        notes: 'Applied via bulk application'
+      }));
+      
+      // Process bulk applications
+      const result = await storage.bulkCreateApplications(applications);
+      
+      // Send email notifications for successful applications
+      const user = await storage.getUserById(req.user!.id);
+      if (user) {
+        const preferences = await storage.getUserEmailPreferences(user.id);
+        
+        if (preferences?.applicationUpdates !== false) {
+          for (const app of result.successes) {
+            try {
+              const job = await storage.getJobListing(app.jobId);
+              if (job) {
+                // Queue confirmation email
+                await emailService.queueEmail(
+                  user.email,
+                  EmailTemplateType.APPLICATION_CONFIRMATION,
+                  {
+                    applicantName: user.fullName || user.username,
+                    jobTitle: job.title,
+                    organization: job.organization,
+                    location: job.location,
+                    appliedAt: new Date(),
+                    applicationId: app.id,
+                    dashboardUrl: `${process.env.APP_URL || 'http://localhost:5000'}/applications`
+                  },
+                  user.id
+                );
+                
+                // Track notification
+                await storage.createNotification({
+                  userId: user.id,
+                  type: EmailTemplateType.APPLICATION_CONFIRMATION,
+                  recipient: user.email,
+                  subject: `Application Received - ${job.title}`,
+                  payload: JSON.stringify({ applicationId: app.id, jobId: app.jobId }),
+                  status: 'queued',
+                  attempts: 0
+                });
+              }
+            } catch (emailError) {
+              console.error('Failed to send email notification for application:', app.id, emailError);
+            }
+          }
+        }
+      }
+      
+      res.json({
+        success: true,
+        results: result,
+        summary: {
+          total: jobIds.length,
+          succeeded: result.successes.length,
+          failed: result.failures.length,
+          skipped: result.skipped.length
+        }
+      });
+    } catch (error: any) {
+      console.error('Bulk application error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   router.post("/api/applications", requireAuth, async (req, res) => {
     try {
       const data = insertApplicationSchema.parse({
@@ -597,6 +746,45 @@ export async function setupRoutes(app: Express, storage: IStorage) {
       }
       
       const application = await storage.createApplication(data);
+      
+      // Send confirmation email
+      const job = await storage.getJobListing(data.jobId);
+      const user = await storage.getUserById(req.user!.id);
+      
+      if (job && user) {
+        // Check user's email preferences
+        const preferences = await storage.getUserEmailPreferences(req.user!.id);
+        
+        if (preferences?.applicationUpdates !== false) {
+          // Queue confirmation email
+          await emailService.queueEmail(
+            user.email,
+            EmailTemplateType.APPLICATION_CONFIRMATION,
+            {
+              applicantName: user.fullName || user.username,
+              jobTitle: job.title,
+              organization: job.organization,
+              location: job.location,
+              appliedAt: new Date(),
+              applicationId: application.id,
+              dashboardUrl: `${process.env.APP_URL || 'http://localhost:5000'}/applications`
+            },
+            user.id
+          );
+          
+          // Track notification
+          await storage.createNotification({
+            userId: user.id,
+            type: EmailTemplateType.APPLICATION_CONFIRMATION,
+            recipient: user.email,
+            subject: `Application Received - ${job.title}`,
+            payload: JSON.stringify({ applicationId: application.id, jobId: data.jobId }),
+            status: 'queued',
+            attempts: 0
+          });
+        }
+      }
+      
       res.json(application);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -614,6 +802,195 @@ export async function setupRoutes(app: Express, storage: IStorage) {
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Application status management routes
+  router.patch("/api/applications/:id/status", requireAuth, async (req, res) => {
+    try {
+      const applicationId = parseInt(req.params.id);
+      const { status, note } = req.body;
+      
+      // Validate status
+      const validStatuses = ['pending', 'under_review', 'shortlisted', 'rejected', 'accepted'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Invalid status value" });
+      }
+      
+      // Get application to check if it exists
+      const application = await storage.getApplication(applicationId);
+      if (!application) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+      
+      // Update status with history tracking
+      const updated = await storage.updateApplicationStatus(
+        applicationId,
+        status,
+        req.user!.id,
+        note
+      );
+      
+      // Send status update email
+      const job = await storage.getJobListing(application.jobId);
+      const user = await storage.getUserById(application.userId);
+      
+      if (job && user && updated) {
+        // Check user's email preferences
+        const preferences = await storage.getUserEmailPreferences(user.id);
+        
+        if (preferences?.applicationUpdates !== false) {
+          // Queue status update email
+          await emailService.queueEmail(
+            user.email,
+            EmailTemplateType.STATUS_UPDATE,
+            {
+              applicantName: user.fullName || user.username,
+              jobTitle: job.title,
+              organization: job.organization,
+              newStatus: status,
+              note: note,
+              applicationUrl: `${process.env.APP_URL || 'http://localhost:5000'}/applications/${applicationId}`
+            },
+            user.id
+          );
+          
+          // Track notification
+          await storage.createNotification({
+            userId: user.id,
+            type: EmailTemplateType.STATUS_UPDATE,
+            recipient: user.email,
+            subject: `Application Status Update - ${job.title}`,
+            payload: JSON.stringify({ applicationId, status, note }),
+            status: 'queued',
+            attempts: 0
+          });
+        }
+        
+        // Send interview scheduled email if interview date is set
+        if (status === 'shortlisted' && updated.interviewDate) {
+          if (preferences?.interviewReminders !== false) {
+            await emailService.queueEmail(
+              user.email,
+              EmailTemplateType.INTERVIEW_SCHEDULED,
+              {
+                applicantName: user.fullName || user.username,
+                jobTitle: job.title,
+                organization: job.organization,
+                interviewDate: updated.interviewDate,
+                location: job.location,
+                applicationUrl: `${process.env.APP_URL || 'http://localhost:5000'}/applications/${applicationId}`
+              },
+              user.id
+            );
+            
+            // Track notification
+            await storage.createNotification({
+              userId: user.id,
+              type: EmailTemplateType.INTERVIEW_SCHEDULED,
+              recipient: user.email,
+              subject: `Interview Scheduled - ${job.title}`,
+              payload: JSON.stringify({ applicationId, interviewDate: updated.interviewDate }),
+              status: 'queued',
+              attempts: 0
+            });
+          }
+        }
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  router.get("/api/applications/:id/history", requireAuth, async (req, res) => {
+    try {
+      const applicationId = parseInt(req.params.id);
+      
+      // Get application to check permissions
+      const application = await storage.getApplication(applicationId);
+      if (!application) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+      
+      // Allow user to see their own application history
+      if (application.userId !== req.user!.id) {
+        // TODO: Add admin/recruiter role check here
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const history = await storage.getApplicationStatusHistory(applicationId);
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Email preferences routes
+  router.get("/api/users/email-preferences", requireAuth, async (req, res) => {
+    try {
+      const preferences = await storage.getUserEmailPreferences(req.user!.id);
+      res.json(preferences);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  router.put("/api/users/email-preferences", requireAuth, async (req, res) => {
+    try {
+      const success = await storage.updateUserEmailPreferences(req.user!.id, req.body);
+      if (success) {
+        res.json({ success: true, preferences: req.body });
+      } else {
+        res.status(500).json({ error: "Failed to update email preferences" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Notifications routes
+  router.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const notifications = await storage.getNotifications(req.user!.id);
+      res.json(notifications);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Test email endpoint (for development)
+  router.post("/api/test-email", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUserById(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const emailId = await emailService.queueEmail(
+        user.email,
+        EmailTemplateType.APPLICATION_CONFIRMATION,
+        {
+          applicantName: user.fullName || user.username,
+          jobTitle: "Test Position",
+          organization: "Test Organization",
+          location: "Test Location",
+          appliedAt: new Date(),
+          applicationId: 999999,
+          dashboardUrl: `${process.env.APP_URL || 'http://localhost:5000'}/applications`
+        },
+        user.id
+      );
+      
+      res.json({ 
+        success: true, 
+        message: `Test email queued with ID: ${emailId}`,
+        recipient: user.email,
+        queueStatus: emailService.getQueueStatus()
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -774,5 +1151,6 @@ export async function setupRoutes(app: Express, storage: IStorage) {
   app.use("/api/ai", aiRoutes); // AI routes
   // app.use("/api/langchain", langchainRoutes); // LangChain routes - temporarily disabled due to errors
   app.use("/api/resume", resumeRoutes); // Resume routes
+  app.use(createResumeManagementRoutes(storage)); // Resume management routes
   app.use(vectorSearchRoutes); // Vector search routes
 }

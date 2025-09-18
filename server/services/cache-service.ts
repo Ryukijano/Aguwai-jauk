@@ -514,7 +514,7 @@ export class CacheService extends EventEmitter {
       // Create indexes
       await this.pool.query(`
         CREATE INDEX IF NOT EXISTS idx_cache_expires_at 
-        ON cache_entries ((metadata->>'expiresAt')::BIGINT)
+        ON cache_entries (CAST(metadata->>'expiresAt' AS BIGINT))
       `);
       
       await this.pool.query(`
@@ -684,7 +684,7 @@ export class CacheService extends EventEmitter {
       try {
         const result = await this.pool.query(
           `DELETE FROM cache_entries 
-           WHERE (metadata->>'expiresAt')::BIGINT < $1`,
+           WHERE CAST(metadata->>'expiresAt' AS BIGINT) < $1`,
           [now - this.config.staleIfErrorMs]
         );
         cleaned += result.rowCount ?? 0;

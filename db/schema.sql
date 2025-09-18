@@ -154,6 +154,6 @@ CREATE TABLE IF NOT EXISTS cache_entries (
 );
 
 -- Create indexes for cache performance
-CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache_entries ((metadata->>'expiresAt')::BIGINT);
+CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache_entries (CAST(metadata->>'expiresAt' AS BIGINT));
 CREATE INDEX IF NOT EXISTS idx_cache_accessed_at ON cache_entries (accessed_at);
 CREATE INDEX IF NOT EXISTS idx_cache_created_at ON cache_entries (created_at);
