@@ -49,11 +49,14 @@ export interface SocialLink {
 export interface Document {
   id: number;
   userId: number;
+  type: string;
   name: string;
-  fileUrl: string;
-  fileType: string;
-  category: string | null;
-  createdAt: string;
+  url: string;
+  size: number | null;
+  mimeType: string | null;
+  isDefault: boolean;
+  parsedData: string | null;
+  uploadedAt: string;
 }
 
 export interface Event {

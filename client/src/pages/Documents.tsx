@@ -86,7 +86,7 @@ const Documents = () => {
   const filteredDocuments = documents
     ? category === "All"
       ? documents
-      : documents.filter((doc) => doc.category === category)
+      : documents.filter((doc) => doc.type === category)
     : [];
 
   // File upload mutation
@@ -176,15 +176,17 @@ const Documents = () => {
     }
   };
 
-  const getFileIcon = (fileType: string) => {
-    if (fileType.includes("pdf")) {
+  const getFileIcon = (mimeType: string | null) => {
+    if (!mimeType) return <File size={24} className="text-gray-500" />;
+    
+    if (mimeType.includes("pdf")) {
       return <FileText size={24} className="text-red-500" />;
-    } else if (fileType.includes("image")) {
+    } else if (mimeType.includes("image")) {
       return <FileImage size={24} className="text-blue-500" />;
     } else if (
-      fileType.includes("doc") ||
-      fileType.includes("word") ||
-      fileType.includes("text")
+      mimeType.includes("doc") ||
+      mimeType.includes("word") ||
+      mimeType.includes("text")
     ) {
       return <FileText size={24} className="text-primary-500" />;
     } else {
@@ -480,7 +482,7 @@ const Documents = () => {
                   {filteredDocuments.map((document) => (
                     <TableRow key={document.id}>
                       <TableCell>
-                        {getFileIcon(document.fileType)}
+                        {getFileIcon(document.mimeType)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {document.name}
@@ -490,23 +492,23 @@ const Documents = () => {
                           variant="outline"
                           className={`
                             ${
-                              document.category === "Resume"
+                              document.type === "Resume"
                                 ? "bg-blue-100 text-blue-700"
-                                : document.category === "Cover Letter"
+                                : document.type === "Cover Letter"
                                 ? "bg-green-100 text-green-700"
-                                : document.category === "Certificate"
+                                : document.type === "Certificate"
                                 ? "bg-purple-100 text-purple-700"
                                 : "bg-gray-100 text-gray-700"
                             }
                             border-0
                           `}
                         >
-                          {document.category || "Other"}
+                          {document.type || "Other"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {format(
-                          new Date(document.createdAt),
+                          new Date(document.uploadedAt),
                           "MMM d, yyyy"
                         )}
                       </TableCell>
@@ -518,7 +520,7 @@ const Documents = () => {
                             asChild
                           >
                             <a
-                              href={document.fileUrl}
+                              href={document.url}
                               target="_blank"
                               rel="noopener noreferrer"
                             >

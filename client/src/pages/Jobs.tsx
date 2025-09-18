@@ -61,11 +61,9 @@ export const Jobs: React.FC = () => {
     queryFn: async () => {
       if (!isAuthenticated || !jobs || jobs.length === 0) return [];
       const jobIds = jobs.map((j: any) => j.id);
-      const response = await apiRequest('/api/applications/check-existing', {
-        method: 'POST',
-        body: JSON.stringify({ jobIds })
-      });
-      return response.appliedJobIds || [];
+      const response = await apiRequest('POST', '/api/applications/check-existing', { jobIds });
+      const data = await response.json();
+      return data.appliedJobIds || [];
     },
     enabled: isAuthenticated && !!jobs && jobs.length > 0
   });
@@ -198,7 +196,7 @@ export const Jobs: React.FC = () => {
       return !isExternal && !hasApplied;
     });
     
-    const allSelectableIds = new Set(selectableJobs.map((job: any) => job.id));
+    const allSelectableIds = new Set<number>(selectableJobs.map((job: any) => job.id));
     setSelectedJobIds(allSelectableIds);
     
     toast({
