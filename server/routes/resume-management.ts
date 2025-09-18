@@ -8,6 +8,7 @@ import mammoth from 'mammoth';
 import { IStorage } from '../storage';
 import type { Request, Response } from 'express';
 import type { User } from '@shared/schema';
+import { analyzeResumeWithAI, ResumeAnalysis } from '../services/resume-analysis-service';
 
 // Extend Express Request type for user
 declare module "express-serve-static-core" {
@@ -74,8 +75,8 @@ async function extractTextFromDOCX(filePath: string): Promise<string> {
   }
 }
 
-// Helper function to parse resume content
-async function parseResumeContent(filePath: string, mimeType: string): Promise<string> {
+// Helper function to parse resume content with AI analysis
+async function parseResumeContent(filePath: string, mimeType: string): Promise<{ parsedData: string; aiAnalysis: ResumeAnalysis | null }> {
   let text = '';
   
   if (mimeType === 'application/pdf') {
@@ -87,17 +88,33 @@ async function parseResumeContent(filePath: string, mimeType: string): Promise<s
   // Basic text processing - remove extra whitespace, normalize
   text = text.replace(/\s+/g, ' ').trim();
   
-  // Extract key information (basic implementation)
+  // Try to get AI analysis
+  let aiAnalysis: ResumeAnalysis | null = null;
+  try {
+    console.log('Performing AI analysis on resume...');
+    aiAnalysis = await analyzeResumeWithAI(text);
+    console.log('AI analysis completed successfully');
+  } catch (error) {
+    console.error('AI analysis failed, falling back to basic extraction:', error);
+  }
+  
+  // Combine basic extraction with AI analysis if available
   const parsedData = {
     fullText: text.substring(0, 10000), // Limit stored text
     extractedAt: new Date().toISOString(),
-    // Add more sophisticated parsing here if needed
-    skills: extractSkills(text),
-    experience: extractExperience(text),
-    education: extractEducation(text)
+    // Use AI-extracted data if available, otherwise fall back to basic extraction
+    skills: aiAnalysis?.extractedData?.skills || extractSkills(text),
+    experience: aiAnalysis?.extractedData?.experience || extractExperience(text),
+    education: aiAnalysis?.extractedData?.education || extractEducation(text),
+    certifications: aiAnalysis?.extractedData?.certifications || [],
+    // Include full AI analysis if available
+    aiAnalysis: aiAnalysis || null
   };
   
-  return JSON.stringify(parsedData);
+  return {
+    parsedData: JSON.stringify(parsedData),
+    aiAnalysis
+  };
 }
 
 // Basic skill extraction (can be enhanced)
@@ -156,8 +173,8 @@ export default function createResumeManagementRoutes(storage: IStorage) {
         });
       }
       
-      // Parse resume content
-      const parsedData = await parseResumeContent(req.file.path, req.file.mimetype);
+      // Parse resume content with AI analysis
+      const { parsedData, aiAnalysis } = await parseResumeContent(req.file.path, req.file.mimetype);
       
       // Create document record
       const document = await storage.createDocument({
@@ -176,7 +193,8 @@ export default function createResumeManagementRoutes(storage: IStorage) {
         document.isDefault = true;
       }
       
-      res.json({
+      // Include AI analysis in response
+      const response: any = {
         success: true,
         document: {
           id: document.id,
@@ -186,7 +204,28 @@ export default function createResumeManagementRoutes(storage: IStorage) {
           isDefault: document.isDefault,
           uploadedAt: document.uploadedAt
         }
-      });
+      };
+      
+      // Add AI analysis to response if available
+      if (aiAnalysis) {
+        response.analysis = {
+          overallScore: aiAnalysis.overallScore,
+          qualificationScore: aiAnalysis.qualificationScore,
+          extractedData: {
+            skills: aiAnalysis.extractedData.skills,
+            education: aiAnalysis.extractedData.education,
+            experience: aiAnalysis.extractedData.experience,
+            certifications: aiAnalysis.extractedData.certifications
+          },
+          strengths: aiAnalysis.strengths,
+          improvements: aiAnalysis.improvements,
+          recommendations: aiAnalysis.recommendations,
+          jobMatches: aiAnalysis.jobMatches,
+          confidence: aiAnalysis.confidence
+        };
+      }
+      
+      res.json(response);
     } catch (error) {
       console.error('Resume upload error:', error);
       // Clean up uploaded file on error
@@ -206,16 +245,38 @@ export default function createResumeManagementRoutes(storage: IStorage) {
     try {
       const resumes = await storage.getUserResumes(req.user.id);
       
-      // Format response
-      const formattedResumes = resumes.map(resume => ({
-        id: resume.id,
-        name: resume.name,
-        size: resume.size,
-        mimeType: resume.mimeType,
-        isDefault: resume.isDefault,
-        url: resume.url,
-        uploadedAt: resume.uploadedAt
-      }));
+      // Format response with AI analysis if available
+      const formattedResumes = resumes.map(resume => {
+        const baseInfo = {
+          id: resume.id,
+          name: resume.name,
+          size: resume.size,
+          mimeType: resume.mimeType,
+          isDefault: resume.isDefault,
+          url: resume.url,
+          uploadedAt: resume.uploadedAt
+        };
+        
+        // Try to parse and include AI analysis if available
+        try {
+          if (resume.parsedData) {
+            const parsed = JSON.parse(resume.parsedData);
+            if (parsed.aiAnalysis) {
+              return {
+                ...baseInfo,
+                analysis: {
+                  overallScore: parsed.aiAnalysis.overallScore,
+                  confidence: parsed.aiAnalysis.confidence
+                }
+              };
+            }
+          }
+        } catch (e) {
+          // If parsing fails, just return base info
+        }
+        
+        return baseInfo;
+      });
       
       res.json({
         resumes: formattedResumes,
@@ -323,13 +384,30 @@ export default function createResumeManagementRoutes(storage: IStorage) {
       const defaultResume = resumes.find(r => r.isDefault);
       
       if (defaultResume) {
+        // Try to include AI analysis if available
+        let analysis = null;
+        try {
+          if (defaultResume.parsedData) {
+            const parsed = JSON.parse(defaultResume.parsedData);
+            if (parsed.aiAnalysis) {
+              analysis = {
+                overallScore: parsed.aiAnalysis.overallScore,
+                confidence: parsed.aiAnalysis.confidence
+              };
+            }
+          }
+        } catch (e) {
+          // If parsing fails, just skip analysis
+        }
+        
         res.json({
           id: defaultResume.id,
           name: defaultResume.name,
-          url: defaultResume.url
+          url: defaultResume.url,
+          analysis
         });
       } else {
-        res.json({ id: null, name: null, url: null });
+        res.json({ id: null, name: null, url: null, analysis: null });
       }
     } catch (error) {
       console.error('Error fetching default resume:', error);
