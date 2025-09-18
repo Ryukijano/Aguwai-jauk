@@ -4,6 +4,8 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { IStorage } from '../storage';
 import { InsertJobListing } from '@shared/schema';
+import { JobTemplateGenerator } from './job-template-generator';
+import { webSearchService } from './web-search-service';
 
 // Initialize AI clients
 const openai = new OpenAI({
@@ -49,9 +51,11 @@ export class AIJobScraperService {
   private storage: IStorage;
   private processedUrls: Set<string> = new Set();
   private rateLimitDelay = 1000; // 1 second between API calls
+  private templateGenerator: JobTemplateGenerator;
   
   constructor(storage: IStorage) {
     this.storage = storage;
+    this.templateGenerator = new JobTemplateGenerator(storage);
   }
 
   /**
@@ -78,7 +82,8 @@ export class AIJobScraperService {
       
       // Deduplicate and validate jobs
       const uniqueJobs = this.deduplicateJobs(allJobs);
-      const validatedJobs = await this.validateAndEnrichJobs(uniqueJobs);
+      // Jobs are already validated and enriched by templateGenerator
+      const validatedJobs = uniqueJobs;
       
       // Store jobs in database
       await this.storeJobs(validatedJobs);
@@ -134,16 +139,23 @@ export class AIJobScraperService {
             const jobListings = parsed.jobs || parsed.listings || [];
             
             for (const job of jobListings) {
-              const formattedJob = await this.extractJobFromContent({
+              const formattedJob = await this.templateGenerator.formatJobListing({
                 title: job.title || '',
-                content: JSON.stringify(job),
-                url: job.applicationLink || '',
-                source: 'OpenAI GPT Search'
+                organization: job.organization || '',
+                location: job.location || '',
+                description: job.description || '',
+                requirements: job.requirements || '',
+                salary: job.salary || '',
+                deadline: job.applicationDeadline || '',
+                jobType: job.jobType || '',
+                category: job.category || '',
+                tags: job.tags || [],
+                source: 'OpenAI GPT Search',
+                sourceUrl: '',
+                applicationLink: job.applicationLink || ''
               });
               
-              if (formattedJob) {
-                jobs.push(formattedJob);
-              }
+              jobs.push(formattedJob);
             }
           } catch (parseError) {
             console.error('Error parsing GPT response:', parseError);
@@ -178,13 +190,25 @@ export class AIJobScraperService {
       for (const query of SEARCH_QUERIES.slice(2, 4)) { // Different queries than GPT
         const searchResults = await webSearchService.searchForJobs(query, 3);
         
-        // Use Gemini to enrich and structure the real search results
+        // Format search results using templateGenerator
         for (const result of searchResults) {
           if (result) {
-            const enrichedJob = await this.enrichJobWithGemini(this.convertPartialToFullJob(result));
-            if (enrichedJob) {
-              jobs.push(enrichedJob);
-            }
+            const formattedJob = await this.templateGenerator.formatJobListing({
+              title: result.title || '',
+              organization: result.organization || '',
+              location: result.location || '',
+              description: result.description || '',
+              requirements: result.requirements || '',
+              salary: result.salary || '',
+              deadline: result.applicationDeadline || '',
+              jobType: result.jobType || '',
+              category: result.category || '',
+              tags: result.tags || [],
+              source: result.source || 'Web Search',
+              sourceUrl: result.sourceUrl || '',
+              applicationLink: result.applicationLink || ''
+            });
+            jobs.push(formattedJob);
           }
         }
       }
@@ -250,16 +274,23 @@ export class AIJobScraperService {
         const listings = JSON.parse(jsonMatch[0]);
         
         for (const job of listings) {
-          const formattedJob = await this.extractJobFromContent({
+          const formattedJob = await this.templateGenerator.formatJobListing({
             title: job.title || '',
-            content: JSON.stringify(job),
-            url: pageContent.url,
-            source: `Web - ${new URL(pageContent.url).hostname}`
+            organization: job.organization || '',
+            location: job.location || '',
+            description: job.description || '',
+            requirements: job.requirements || '',
+            salary: job.salary || '',
+            deadline: job.deadline || '',
+            jobType: job.type || '',
+            category: job.category || '',
+            tags: job.tags || [],
+            source: `Web - ${new URL(pageContent.url).hostname}`,
+            sourceUrl: pageContent.url,
+            applicationLink: job.link || pageContent.url
           });
           
-          if (formattedJob) {
-            jobs.push(formattedJob);
-          }
+          jobs.push(formattedJob);
         }
       }
     } catch (error) {
@@ -309,16 +340,23 @@ export class AIJobScraperService {
         const listings = parsed.jobs || parsed.listings || [];
         
         for (const job of listings) {
-          const formattedJob = await this.extractJobFromContent({
+          const formattedJob = await this.templateGenerator.formatJobListing({
             title: job.title || '',
-            content: JSON.stringify(job),
-            url: url,
-            source: `GPT - ${new URL(url).hostname}`
+            organization: job.organization || '',
+            location: job.location || '',
+            description: job.description || '',
+            requirements: job.requirements || '',
+            salary: job.salary || '',
+            deadline: job.deadline || '',
+            jobType: job.jobType || '',
+            category: job.category || '',
+            tags: job.tags || [],
+            source: `GPT - ${new URL(url).hostname}`,
+            sourceUrl: url,
+            applicationLink: job.applicationLink || url
           });
           
-          if (formattedJob) {
-            jobs.push(formattedJob);
-          }
+          jobs.push(formattedJob);
         }
       }
     } catch (error) {
@@ -571,17 +609,18 @@ export class AIJobScraperService {
   }
 
   /**
-   * Batch validate and enrich multiple jobs
+   * Batch validate and enrich multiple jobs using templateGenerator
    */
   private async validateAndEnrichJobs(jobs: InsertJobListing[]): Promise<InsertJobListing[]> {
-    const enrichedJobs: InsertJobListing[] = [];
+    // Jobs are already processed by templateGenerator, just validate them
+    const validatedJobs: InsertJobListing[] = [];
     
     for (const job of jobs) {
-      const enrichedJob = await this.validateAndEnrichJob(job);
-      enrichedJobs.push(enrichedJob);
+      const validated = await this.templateGenerator.validateJobData(job);
+      validatedJobs.push(validated);
     }
     
-    return enrichedJobs;
+    return validatedJobs;
   }
 
   /**
