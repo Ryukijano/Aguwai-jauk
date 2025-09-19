@@ -65,4 +65,4 @@ localPort = 45677
 externalPort = 5000
 
 [agent]
-integrations = ["javascript_gemini:1.0.0", "javascript_openai:1.0.0", "javascript_sendgrid:1.0.0"]
+integrations = ["javascript_gemini:1.0.0", "javascript_openai:1.0.0", "javascript_sendgrid:1.0.0", "github:1.0.0"]

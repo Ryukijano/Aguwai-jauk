@@ -1,6 +1,112 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# Build outputs
+dist/
+build/
+.output/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Uploads directory (contains user files and resumes)
+uploads/
+
+# Cache directories
+.cache/
+.vite/
+.next/
+.nuxt/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files and directories
+/tmp/
+temp/
+*.tmp
+*.temp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and test results
+lib-cov
+coverage/
+*.lcov
+.nyc_output
+
+# ESLint cache
+.eslintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Database files (if using local SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets and config
+secrets.json
+config.production.json
+
+# Server specific
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Cookies and session data
+cookies.txt
+
+# Deployment and Docker
+.dockerignore
+Dockerfile.prod
+
+# Replit specific (already configured in production)
+.config/
+.upm/
+replit.nix
