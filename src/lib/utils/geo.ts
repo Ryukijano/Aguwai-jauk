@@ -1,4 +1,4 @@
-import { Coordinates, GeoBounds } from '../../types/geo';
+import { Coordinates } from '../../types/geo';
 import { GEO_BOUNDS } from '../../config/constants';
 
 export const isWithinAssam = (coordinates: Coordinates): boolean => {

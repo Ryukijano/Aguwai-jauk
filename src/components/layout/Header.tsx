@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, User } from 'lucide-react';
 import { APP_NAME } from '../../config/constants';
 
 export default function Header() {
   const navigate = useNavigate();
-  const [showSearch, setShowSearch] = useState(false);
 
   const handleSearchClick = () => {
     navigate('/jobs');
